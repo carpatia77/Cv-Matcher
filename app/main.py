@@ -231,8 +231,12 @@ def extract_text_from_pdf(file_path: str) -> str:
 def get_client() -> OpenAI:
     if not NVIDIA_API_KEY:
         raise RuntimeError("NVIDIA_API_KEY não configurada no ambiente.")
-    return OpenAI(base_url=NVIDIA_BASE_URL, api_key=NVIDIA_API_KEY, timeout=30.0, max_retries=0)
-
+    return OpenAI(
+        base_url=NVIDIA_BASE_URL,
+        api_key=NVIDIA_API_KEY,
+        timeout=30.0,
+        max_retries=0,
+    )
 
 async def timed_call(label, coro, timeout_s, fallback=None):
     dbg(f"{label} start timeout={timeout_s}")
@@ -290,94 +294,57 @@ async def run_ats_pipeline(input_pdf: str, output_pdf: str, vaga_alvo: str, desc
     client = get_client()
     DELIMITADOR_CV = "=== CURRICULO_OTIMIZADO_INICIO ==="
 
-    prompt_otimizacao = f"""
-Como Especialista ATS, reescreva este currículo para ter a máxima aderência semântica com a vaga alvo, sem inventar informações.
+        prompt_auditoria = f"""
+Você é um Headhunter Executivo.
+Analise a aderência do currículo à vaga abaixo e retorne APENAS:
 
-VAGA ALVO: {vaga_alvo}
-VAGA: {descricao_vaga}
-CURRÍCULO ORIGINAL: {cv_text_raw}
-
-{DELIMITADOR_CV}
-Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simples e sem caracteres decorativos.
-"""
-
-    fallback_cv = sanitize_text(cv_text_raw)
-    comp_otimizacao, opt_err = await timed_call(
-        "optimization",
-        asyncio.to_thread(
-            lambda: client.chat.completions.create(
-                model="meta/llama-3.3-70b-instruct",
-                messages=[{"role": "user", "content": prompt_otimizacao}],
-                temperature=0.2,
-                max_tokens=2500,
-            )
-        ),
-        TIMEOUT_OPTIMIZATION,
-        fallback=None,
-    )
-
-    if comp_otimizacao and hasattr(comp_otimizacao, "choices"):
-        resposta_otimizacao = sanitize_text(comp_otimizacao.choices[0].message.content)
-        cv_otimizado_texto = resposta_otimizacao.split(DELIMITADOR_CV, 1)[1].strip() if DELIMITADOR_CV in resposta_otimizacao else resposta_otimizacao.strip()
-    else:
-        cv_otimizado_texto = fallback_cv[:3500]
-        dbg("optimization fallback used")
-
-    try:
-        s_nlp = await asyncio.wait_for(
-            asyncio.to_thread(calcular_similaridade_semantica, cv_otimizado_texto, descricao_vaga, client),
-            timeout=TIMEOUT_EMBEDDING,
-        )
-    except Exception as e:
-        dbg(f"similarity fallback err={repr(e)}")
-        s_nlp = 50.0
-
-    prompt_auditoria = f"""
-Você é um Headhunter Executivo. Analise a aderência do CURRÍCULO à VAGA de {vaga_alvo}. Seja altamente crítico.
-
-VAGA: {descricao_vaga}
-CURRÍCULO: {cv_otimizado_texto[:2500]}
-
-Retorne EXATAMENTE estas tags:
 [SCORE_TECNICO]XX[/SCORE_TECNICO]
 [SCORE_SENIORIDADE]XX[/SCORE_SENIORIDADE]
 [PENALIDADE_FRICCAO]XX[/PENALIDADE_FRICCAO]
 
-Após as tags, escreva o título "**ANÁLISE DE RISCO DO RECRUTADOR**" e justifique os motivos das notas.
-"""
+Depois, escreva um resumo curto com 3 bullets sobre os principais riscos.
+
+VAGA: {descricao_vaga}
+CURRÍCULO: {cv_otimizado_texto[:1800]}
+""".strip()
 
     fallback_audit = """
 **ANÁLISE DE RISCO DO RECRUTADOR**
-- Não foi possível completar a auditoria por timeout ou erro.
-- O sistema retornou fallback conservador para manter a operação.
+- Auditoria indisponível no momento.
+- O sistema aplicou fallback conservador.
+- Revise manualmente o currículo e a descrição da vaga.
 """.strip()
 
-    comp_auditoria, audit_err = await timed_call(
-        "audit",
-        asyncio.to_thread(
-            lambda: client.chat.completions.create(
-                model="deepseek-ai/deepseek-v4-flash",
-                messages=[{"role": "user", "content": prompt_auditoria}],
-                temperature=0.1,
-                max_tokens=1200,
-            )
-        ),
-        TIMEOUT_AUDIT,
-        fallback=None,
-    )
-
+    try:
+        dbg("audit request start")
+        comp_auditoria = await asyncio.wait_for(
+            asyncio.to_thread(
+                lambda: client.chat.completions.create(
+                    model="deepseek-ai/deepseek-v4-flash",
+                    messages=[{"role": "user", "content": prompt_auditoria}],
+                    temperature=0.1,
+                    max_tokens=700,
+                    request_timeout=20,
+                )
+            ),
+            timeout=TIMEOUT_AUDIT,
+        )
+        dbg("audit response ok")
+        resposta_auditoria = sanitize_text(comp_auditoria.choices[0].message.content)
+        audit_err = None
+    except Exception as e:
+        dbg(f"audit fallback err={repr(e)}")
+        resposta_auditoria = fallback_audit
+        audit_err = e
     if comp_auditoria and hasattr(comp_auditoria, "choices"):
         resposta_auditoria = sanitize_text(comp_auditoria.choices[0].message.content)
     else:
         resposta_auditoria = fallback_audit
         dbg("audit fallback used")
 
-    s_tech = extract_note("SCORE_TECNICO", resposta_auditoria, default=45 if audit_err else 50)
+       s_tech = extract_note("SCORE_TECNICO", resposta_auditoria, default=45 if audit_err else 50)
     s_senior = extract_note("SCORE_SENIORIDADE", resposta_auditoria, default=45 if audit_err else 50)
     penalidade = extract_note("PENALIDADE_FRICCAO", resposta_auditoria, default=10 if audit_err else 0)
-
-    score_final = round((s_tech * 0.45) + (s_senior * 0.35) + (s_nlp * 0.20) - penalidade, 1)
-    score_final = max(0.0, min(100.0, score_final))
 
     await generate_pdf_with_timeout(vaga_alvo, score_final, s_tech, s_senior, s_nlp, penalidade, resposta_auditoria, output_pdf)
     dbg(f"pipeline done elapsed={time.time()-t0:.2f}s")
