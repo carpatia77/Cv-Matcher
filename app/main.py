@@ -15,16 +15,24 @@ from fpdf import FPDF
 from openai import OpenAI
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+APP_DIR = BASE_DIR / "app"
+TEMPLATES_DIR = APP_DIR / "templates"
+STATIC_DIR = APP_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 JOBS_FILE = DATA_DIR / "jobs.json"
+
 NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "")
 NVIDIA_BASE_URL = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
 APP_ENV = os.getenv("APP_ENV", "development")
 
 app = FastAPI(title="ATS Predictor MVP")
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "app" / "static")), name="static")
-templates = Jinja2Templates(directory=str(BASE_DIR / "app" / "templates"))
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request, "app_env": APP_ENV})
 
 class ReportPDF(FPDF):
     def header(self):
