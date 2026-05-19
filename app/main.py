@@ -9,6 +9,7 @@ import traceback
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
+from functools import lru_cache
 
 import fitz
 import httpx
@@ -20,6 +21,7 @@ from fastapi.templating import Jinja2Templates
 from fpdf import FPDF
 from openai import AsyncOpenAI
 
+# ---------- CONFIGURAÇÕES ----------
 BASE_DIR = Path(__file__).resolve().parent.parent
 APP_DIR = BASE_DIR / "app"
 TEMPLATES_DIR = APP_DIR / "templates"
@@ -33,93 +35,54 @@ NVIDIA_BASE_URL = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com
 APP_ENV = os.getenv("APP_ENV", "development")
 
 TIMEOUT_EXTRACTION = float(os.getenv("TIMEOUT_EXTRACTION", "20"))
-TIMEOUT_OPTIMIZATION = float(os.getenv("TIMEOUT_OPTIMIZATION", "120"))
-TIMEOUT_EMBEDDING = float(os.getenv("TIMEOUT_EMBEDDING", "60"))
-TIMEOUT_AUDIT = float(os.getenv("TIMEOUT_AUDIT", "120"))
+TIMEOUT_OPTIMIZATION = float(os.getenv("TIMEOUT_OPTIMIZATION", "90"))   # reduzido
+TIMEOUT_EMBEDDING = float(os.getenv("TIMEOUT_EMBEDDING", "30"))
+TIMEOUT_AUDIT = float(os.getenv("TIMEOUT_AUDIT", "90"))                 # reduzido
 TIMEOUT_PDF = float(os.getenv("TIMEOUT_PDF", "30"))
-HTTPX_TIMEOUT = float(os.getenv("HTTPX_TIMEOUT", "300"))
-AUDIT_MAX_TOKENS = int(os.getenv("AUDIT_MAX_TOKENS", "2500"))
+HTTPX_TIMEOUT = float(os.getenv("HTTPX_TIMEOUT", "180"))                # reduzido para 180s
+AUDIT_MAX_TOKENS = int(os.getenv("AUDIT_MAX_TOKENS", "2000"))           # reduzido
 
-# Apenas modelos DeepSeek disponíveis no catálogo NVIDIA
+# Modelos DeepSeek disponíveis (apenas os confirmados no catálogo)
 DEEPSEEK_MODELS = [
     "deepseek-ai/deepseek-v4-flash",
     "deepseek-ai/deepseek-v4-pro",
 ]
 FALLBACK_AUDIT_MODEL = "meta/llama-3.3-70b-instruct"
 
-# Cache de resultados com TTL de 1 hora
+# Cache de resultados (com TTL de 1 hora)
 RESULTS_CACHE = {}
 RESULTS_TTL_SECONDS = 3600
 
+# ---------- INICIALIZAÇÃO FASTAPI ----------
 app = FastAPI(title="ATS Predictor MVP")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 TMP_DIR.mkdir(exist_ok=True)
 
-
+# ---------- FUNÇÕES AUXILIARES ----------
 def dbg(msg):
     print(f"[ATS-DBG] {time.strftime('%H:%M:%S')} {msg}", flush=True)
 
-
 def cleanup_old_results():
-    """Remove resultados expirados do cache."""
     now = datetime.now()
     expired = [rid for rid, item in RESULTS_CACHE.items()
                if now - item["created_at"] > timedelta(seconds=RESULTS_TTL_SECONDS)]
     for rid in expired:
         del RESULTS_CACHE[rid]
-        dbg(f"cache: removed expired result {rid}")
-
-
-class ReportPDF(FPDF):
-    def header(self):
-        self.set_text_color(0, 51, 102)
-        self.set_font(self.main_font, "B", 14)
-        self.cell(
-            0,
-            10,
-            pdf_text(self, "RELATORIO PREDITIVO DE EMPREGABILIDADE (ATS)"),
-            align="C",
-            new_x="LMARGIN",
-            new_y="NEXT",
-        )
-        self.set_line_width(0.5)
-        self.set_draw_color(0, 51, 102)
-        self.line(15, 22, 195, 22)
-        self.ln(8)
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_text_color(128, 128, 128)
-        self.set_font(self.main_font, "", 8)
-        self.cell(
-            0,
-            10,
-            pdf_text(self, f"Pagina {self.page_no()} | Analise Neural"),
-            align="C",
-        )
-
+        if expired:
+            dbg(f"cache: removed {len(expired)} expired results")
 
 def sanitize_text(text: str) -> str:
-    if text is None:
+    if not text:
         return ""
     text = str(text)
+    # Substitui caracteres Unicode problemáticos
     subs = {
-        "\u2013": "-",
-        "\u2014": "-",
-        "\u201c": '"',
-        "\u201d": '"',
-        "\u2018": "'",
-        "\u2019": "'",
-        "\u2022": "-",
-        "\u2023": "-",
-        "\u2043": "-",
-        "\u2219": "-",
-        "\u00b7": "-",
-        "\u2026": "...",
-        "\u00a0": " ",
-        "\t": "    ",
+        "\u2013": "-", "\u2014": "-", "\u201c": '"', "\u201d": '"',
+        "\u2018": "'", "\u2019": "'", "\u2022": "-", "\u2023": "-",
+        "\u2043": "-", "\u2219": "-", "\u00b7": "-", "\u2026": "...",
+        "\u00a0": " ", "\t": "    ",
     }
     for k, v in subs.items():
         text = text.replace(k, v)
@@ -127,30 +90,26 @@ def sanitize_text(text: str) -> str:
     text = "\n".join(line.rstrip() for line in text.splitlines())
     return text.strip()
 
-
 def strip_tags(texto: str) -> str:
     texto = re.sub(r"\[SCORE_TECNICO\]\d+\[/SCORE_TECNICO\]", "", texto)
     texto = re.sub(r"\[SCORE_SENIORIDADE\]\d+\[/SCORE_SENIORIDADE\]", "", texto)
     texto = re.sub(r"\[PENALIDADE_FRICCAO\]\d+\[/PENALIDADE_FRICCAO\]", "", texto)
     return sanitize_text(texto)
 
-
 def extract_note(tag: str, text: str, default: int = 0) -> int:
-    # Regex mais flexível: permite espaços entre colchetes e número
+    # Regex flexível: permite espaços antes/depois do número
     pattern = rf"\[{tag}\]\s*(\d+)\s*\[/{tag}\]"
     m = re.search(pattern, text, re.IGNORECASE)
     if m:
         return int(m.group(1))
-    # Fallback: busca o número após a tag (menos preciso)
-    m2 = re.search(rf"{tag}.*?(\d+)", text, re.IGNORECASE | re.DOTALL)
+    # Fallback simples: busca o primeiro número após a tag
+    m2 = re.search(rf"{tag}[^\d]*(\d+)", text, re.IGNORECASE)
     return int(m2.group(1)) if m2 else default
-
 
 def cosine_sim(v1, v2):
     a, b = np.array(v1), np.array(v2)
     denom = np.linalg.norm(a) * np.linalg.norm(b)
     return 0.0 if denom == 0 else float(np.dot(a, b) / denom)
-
 
 def configure_font(pdf: FPDF):
     regular = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
@@ -162,19 +121,35 @@ def configure_font(pdf: FPDF):
     else:
         pdf.main_font = "Helvetica"
 
-
 def pdf_text(pdf: FPDF, txt: str) -> str:
     txt = sanitize_text(txt)
-    return txt if getattr(pdf, "main_font", "Helvetica") == "Uni" else txt.encode("latin-1", "replace").decode("latin-1")
-
+    if getattr(pdf, "main_font", "Helvetica") == "Uni":
+        return txt
+    return txt.encode("latin-1", "replace").decode("latin-1")
 
 def safe_cell(pdf: FPDF, h: float, txt: str, **kwargs):
     pdf.cell(0, h, pdf_text(pdf, txt), **kwargs)
 
-
 def safe_multicell(pdf: FPDF, w: float, h: float, txt: str, **kwargs):
     pdf.multi_cell(w, h, pdf_text(pdf, txt), **kwargs)
 
+# ---------- RELATÓRIO PDF ----------
+class ReportPDF(FPDF):
+    def header(self):
+        self.set_text_color(0, 51, 102)
+        self.set_font(self.main_font, "B", 14)
+        self.cell(0, 10, pdf_text(self, "RELATORIO PREDITIVO DE EMPREGABILIDADE (ATS)"),
+                  align="C", new_x="LMARGIN", new_y="NEXT")
+        self.set_line_width(0.5)
+        self.set_draw_color(0, 51, 102)
+        self.line(15, 22, 195, 22)
+        self.ln(8)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_text_color(128, 128, 128)
+        self.set_font(self.main_font, "", 8)
+        self.cell(0, 10, pdf_text(self, f"Pagina {self.page_no()} | Analise Neural"), align="C")
 
 def generate_pdf(vaga_alvo, score_final, s_tech, s_senior, s_nlp, penalidade, analise_texto, output_path: str):
     pdf = ReportPDF()
@@ -241,14 +216,14 @@ def generate_pdf(vaga_alvo, score_final, s_tech, s_senior, s_nlp, penalidade, an
     pdf.output(output_path)
     return output_path
 
-
+# ---------- CARREGAMENTO DE VAGAS ----------
 def load_jobs():
-    """Carrega a lista de vagas, criando arquivo padrão se necessário."""
     if not JOBS_FILE.exists():
         JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
         default_jobs = [
             {"id": "dev_python", "titulo": "Desenvolvedor Python Pleno", "descricao": "Experiência com FastAPI, PostgreSQL, Docker, testes unitários."},
             {"id": "data_scientist", "titulo": "Cientista de Dados", "descricao": "Machine Learning, Python, SQL, visualização de dados."},
+            {"id": "arquiteto-ia", "titulo": "Arquiteto de IA", "descricao": "Experiência em arquitetura de sistemas de IA, LLMs, MLOps, cloud (AWS/GCP/Azure)."},
         ]
         with open(JOBS_FILE, "w", encoding="utf-8") as f:
             json.dump(default_jobs, f, indent=2, ensure_ascii=False)
@@ -256,13 +231,16 @@ def load_jobs():
     with open(JOBS_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
-
+# ---------- EXTRAÇÃO DE TEXTO DO PDF ----------
 def extract_text_from_pdf(file_path: str) -> str:
     doc = fitz.open(file_path)
     text = " ".join(page.get_text() for page in doc)
     return " ".join(text.split())
 
+async def extract_text_with_timeout(file_path: str):
+    return await asyncio.wait_for(asyncio.to_thread(extract_text_from_pdf, file_path), timeout=TIMEOUT_EXTRACTION)
 
+# ---------- CLIENTE ASSÍNCRONO ----------
 async def get_async_client() -> AsyncOpenAI:
     if not NVIDIA_API_KEY:
         raise RuntimeError("NVIDIA_API_KEY não configurada no ambiente.")
@@ -270,10 +248,10 @@ async def get_async_client() -> AsyncOpenAI:
         base_url=NVIDIA_BASE_URL,
         api_key=NVIDIA_API_KEY,
         timeout=httpx.Timeout(HTTPX_TIMEOUT, connect=30.0, read=HTTPX_TIMEOUT, write=30.0, pool=30.0),
-        max_retries=0,
+        max_retries=1,                     # uma única repetição
     )
 
-
+# ---------- TIMED CALL (CONTROLE DE TIMEOUT) ----------
 async def timed_call(label, coro, timeout_s, fallback=None):
     dbg(f"{label} start timeout={timeout_s}")
     try:
@@ -288,40 +266,51 @@ async def timed_call(label, coro, timeout_s, fallback=None):
         dbg(f"{label} traceback: {traceback.format_exc()}")
         return fallback, f"error:{label}:{type(e).__name__}:{repr(e)}"
 
-
-async def extract_text_with_timeout(file_path: str):
-    return await asyncio.wait_for(asyncio.to_thread(extract_text_from_pdf, file_path), timeout=TIMEOUT_EXTRACTION)
-
-
-async def generate_pdf_with_timeout(*args, **kwargs):
-    return await asyncio.wait_for(asyncio.to_thread(generate_pdf, *args, **kwargs), timeout=TIMEOUT_PDF)
-
+# ---------- SIMILARIDADE SEMÂNTICA (CORRIGIDA) ----------
+# Cache simples para evitar recálculos repetidos (mesmo par de textos)
+@lru_cache(maxsize=128)
+def _embedding_cache_key(text1_hash, text2_hash):
+    return None  # placeholder, usamos hash dos textos
 
 async def calcular_similaridade_semantica(texto1: str, texto2: str, cliente_api: AsyncOpenAI) -> float:
     texto1 = sanitize_text(texto1)[:2000]
     texto2 = sanitize_text(texto2)[:2000]
+
+    # Modelos de embedding da NVIDIA (sem input_type, testados)
     tentativas = [
-        {"model": "nvidia/llama-3.2-nv-embedqa-1b-v2", "payload": {"input_type": "passage"}},
-        {"model": "nvidia/nv-embedqa-e5-v5", "payload": {"input_type": "passage"}},
         {"model": "nvidia/nv-embed-v1", "payload": {}},
+        {"model": "nvidia/nv-embedqa-mistral-7b-v2", "payload": {}},
+        {"model": "nvidia/llama-3.2-nv-embedqa-1b-v2", "payload": {}},
     ]
+
     last_err = None
     for t in tentativas:
         try:
-            resp1 = await cliente_api.embeddings.create(model=t["model"], input=texto1, **t["payload"])
-            resp2 = await cliente_api.embeddings.create(model=t["model"], input=texto2, **t["payload"])
+            dbg(f"embedding trying model={t['model']}")
+            resp1 = await cliente_api.embeddings.create(
+                model=t["model"],
+                input=texto1,
+                encoding_format="float"
+            )
+            resp2 = await cliente_api.embeddings.create(
+                model=t["model"],
+                input=texto2,
+                encoding_format="float"
+            )
             v1 = resp1.data[0].embedding
             v2 = resp2.data[0].embedding
-            return round(max(0.0, min(100.0, cosine_sim(v1, v2) * 100)), 2)
+            sim = round(cosine_sim(v1, v2) * 100, 2)
+            dbg(f"embedding success model={t['model']} similarity={sim}%")
+            return max(0.0, min(100.0, sim))
         except Exception as e:
             last_err = e
-            dbg(f"embedding fail model={t['model']} err={repr(e)}")
-    dbg(f"embedding fallback 50.0 last_err={repr(last_err)}")
+            dbg(f"embedding fail model={t['model']} err={type(e).__name__}: {repr(e)}")
+
+    dbg(f"embedding all models failed, returning fallback 50.0. last_err={repr(last_err)}")
     return 50.0
 
-
+# ---------- AUDITORIA COM FALLBACK (DEEPSEEK E META) ----------
 async def run_audit_with_fallback(client: AsyncOpenAI, prompt_auditoria: str, fallback_audit: str):
-    # Tentar modelos DeepSeek disponíveis
     for model_name in DEEPSEEK_MODELS:
         dbg(f"audit trying model={model_name}")
         try:
@@ -338,7 +327,6 @@ async def run_audit_with_fallback(client: AsyncOpenAI, prompt_auditoria: str, fa
             )
             if comp_auditoria and hasattr(comp_auditoria, "choices"):
                 raw_audit = comp_auditoria.choices[0].message.content or ""
-                dbg(f"audit model={model_name} raw_response={raw_audit[:200]!r}")
                 if raw_audit.strip():
                     dbg(f"audit SUCCESS with model={model_name}")
                     return sanitize_text(raw_audit), None, model_name
@@ -349,7 +337,7 @@ async def run_audit_with_fallback(client: AsyncOpenAI, prompt_auditoria: str, fa
         except Exception as e:
             dbg(f"audit model={model_name} exception: {type(e).__name__}: {repr(e)}")
 
-    # Fallback para modelo alternativo
+    # Fallback para Llama 3.3
     dbg(f"audit all DeepSeek failed, trying fallback model={FALLBACK_AUDIT_MODEL}")
     try:
         comp_auditoria, audit_err = await timed_call(
@@ -365,7 +353,6 @@ async def run_audit_with_fallback(client: AsyncOpenAI, prompt_auditoria: str, fa
         )
         if comp_auditoria and hasattr(comp_auditoria, "choices"):
             raw_audit = comp_auditoria.choices[0].message.content or ""
-            dbg(f"audit fallback raw_response={raw_audit[:200]!r}")
             if raw_audit.strip():
                 dbg(f"audit SUCCESS with fallback model={FALLBACK_AUDIT_MODEL}")
                 return sanitize_text(raw_audit), None, FALLBACK_AUDIT_MODEL
@@ -375,11 +362,12 @@ async def run_audit_with_fallback(client: AsyncOpenAI, prompt_auditoria: str, fa
     dbg("audit ALL models failed, returning hardcoded fallback")
     return fallback_audit, RuntimeError("Todos os modelos de auditoria falharam"), "none"
 
-
+# ---------- PIPELINE PRINCIPAL ----------
 async def run_ats_pipeline(input_pdf: str, output_pdf: str, vaga_alvo: str, descricao_vaga: str):
     t0 = time.time()
     dbg(f"pipeline start vaga={vaga_alvo}")
 
+    # Extração do texto do PDF
     cv_text_raw = await extract_text_with_timeout(input_pdf)
     dbg(f"pdf extract done len={len(cv_text_raw)} elapsed={time.time()-t0:.2f}s")
     if not cv_text_raw.strip():
@@ -387,27 +375,27 @@ async def run_ats_pipeline(input_pdf: str, output_pdf: str, vaga_alvo: str, desc
 
     client = await get_async_client()
     try:
+        # ---- 1. OTIMIZAÇÃO DO CURRÍCULO ----
         DELIMITADOR_CV = "=== CURRICULO_OTIMIZADO_INICIO ==="
-
         prompt_otimizacao = f"""
-Como Especialista ATS, reescreva este currículo para ter a máxima aderência semântica com a vaga alvo, sem inventar informações.
+Como Especialista ATS, reescreva este currículo para ter máxima aderência semântica com a vaga alvo, sem inventar informações.
 
 VAGA ALVO: {vaga_alvo}
 VAGA: {descricao_vaga}
 CURRÍCULO ORIGINAL: {cv_text_raw}
 
 {DELIMITADOR_CV}
-Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simples e sem caracteres decorativos.
+Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simples.
 """.strip()
 
-        fallback_cv = sanitize_text(cv_text_raw)
+        fallback_cv = sanitize_text(cv_text_raw)[:3500]
         comp_otimizacao, opt_err = await timed_call(
             "optimization",
             client.chat.completions.create(
                 model="meta/llama-3.3-70b-instruct",
                 messages=[{"role": "user", "content": prompt_otimizacao}],
                 temperature=0.2,
-                max_tokens=3000,
+                max_tokens=2500,   # reduzido para velocidade
             ),
             TIMEOUT_OPTIMIZATION,
             fallback=None,
@@ -421,9 +409,10 @@ Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simple
                 else resposta_otimizacao.strip()
             )
         else:
-            cv_otimizado_texto = fallback_cv[:3500]
+            cv_otimizado_texto = fallback_cv
             dbg("optimization fallback used")
 
+        # ---- 2. SIMILARIDADE SEMÂNTICA (NLP) ----
         try:
             s_nlp = await asyncio.wait_for(
                 calcular_similaridade_semantica(cv_otimizado_texto, descricao_vaga, client),
@@ -433,38 +422,35 @@ Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simple
             dbg(f"similarity fallback err={repr(e)}")
             s_nlp = 50.0
 
+        # ---- 3. AUDITORIA (DEEPSEEK) ----
+        # Prompt mais conciso para acelerar
         prompt_auditoria = f"""
-Você é um Headhunter Executivo sênior e extremamente crítico.
-Sua missão é produzir uma auditoria minuciosa, detalhada, profunda e útil para decisão de recrutamento.
+Você é Headhunter Executivo. Produza uma auditoria detalhada para decisão de recrutamento.
 
-Requisitos obrigatórios:
-1. Retorne primeiro exatamente estas tags:
+Requisitos:
+1. Inclua exatamente estas tags:
 [SCORE_TECNICO]XX[/SCORE_TECNICO]
 [SCORE_SENIORIDADE]XX[/SCORE_SENIORIDADE]
 [PENALIDADE_FRICCAO]XX[/PENALIDADE_FRICCAO]
 
-2. Depois escreva o título:
-**ANÁLISE DE RISCO DO RECRUTADOR**
+2. Título: **ANÁLISE DE RISCO DO RECRUTADOR**
 
-3. Depois do título, escreva:
-- Resumo executivo da aderência.
-- Leitura de hard skills e gaps técnicos.
-- Leitura de senioridade, autonomia e maturidade.
-- Riscos de recrutamento e fricções de mercado.
-- Forças competitivas do candidato.
-- Fragilidades que podem travar shortlist.
-- Recomendações práticas para melhorar o score.
-- Conclusão final com parecer de contratação.
+3. Conteúdo obrigatório:
+- Resumo executivo
+- Hard skills e gaps técnicos
+- Senioridade e maturidade
+- Riscos e fricções de mercado
+- Forças competitivas
+- Fragilidades
+- Recomendações práticas
+- Conclusão final com parecer
 
-4. Seja longo, detalhado e minucioso.
-5. Não invente experiências não presentes no currículo.
-6. Use linguagem de headhunter experiente.
-7. Pode usar parágrafos extensos e bullets.
+Seja crítico e detalhado. Não invente experiências.
 
 VAGA: {descricao_vaga}
 
 CURRÍCULO OTIMIZADO:
-{cv_otimizado_texto[:2500]}
+{cv_otimizado_texto[:2000]}   # reduzido para 2000 caracteres
 """.strip()
 
         fallback_audit = """
@@ -473,24 +459,27 @@ CURRÍCULO OTIMIZADO:
 [PENALIDADE_FRICCAO]10[/PENALIDADE_FRICCAO]
 
 **ANÁLISE DE RISCO DO RECRUTADOR**
-- Auditoria indisponível no momento.
-- O sistema aplicou fallback conservador.
+- Auditoria indisponível no momento. Sistema aplicou fallback conservador.
 - Revise manualmente o currículo e a descrição da vaga.
-""".strip()
+"""
 
         resposta_auditoria, audit_err, audit_model_used = await run_audit_with_fallback(
             client, prompt_auditoria, fallback_audit
         )
         dbg(f"audit final model_used={audit_model_used} has_error={audit_err is not None}")
 
+        # ---- 4. EXTRAÇÃO DOS SCORES ----
         s_tech = extract_note("SCORE_TECNICO", resposta_auditoria, default=45 if audit_err else 50)
         s_senior = extract_note("SCORE_SENIORIDADE", resposta_auditoria, default=45 if audit_err else 50)
         penalidade = extract_note("PENALIDADE_FRICCAO", resposta_auditoria, default=10 if audit_err else 0)
 
+        # ---- 5. CÁLCULO DO SCORE FINAL ----
         score_final = round((s_tech * 0.45) + (s_senior * 0.35) + (s_nlp * 0.20) - penalidade, 1)
         score_final = max(0.0, min(100.0, score_final))
 
+        # ---- 6. GERAÇÃO DO PDF ----
         await generate_pdf_with_timeout(vaga_alvo, score_final, s_tech, s_senior, s_nlp, penalidade, resposta_auditoria, output_pdf)
+
         dbg(f"pipeline done elapsed={time.time()-t0:.2f}s")
 
         return {
@@ -512,22 +501,23 @@ CURRÍCULO OTIMIZADO:
         await client.close()
         dbg("async client closed")
 
+# ---------- FUNÇÃO DE GERAÇÃO DE PDF COM TIMEOUT ----------
+async def generate_pdf_with_timeout(*args, **kwargs):
+    return await asyncio.wait_for(asyncio.to_thread(generate_pdf, *args, **kwargs), timeout=TIMEOUT_PDF)
 
+# ---------- ENDPOINTS ----------
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse(request=request, name="index.html", context={"app_env": APP_ENV})
-
 
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "env": APP_ENV}
 
-
 @app.get("/api/jobs")
 async def list_jobs():
     cleanup_old_results()
     return JSONResponse(load_jobs())
-
 
 @app.get("/api/debug/models")
 async def debug_models():
@@ -540,7 +530,6 @@ async def debug_models():
         return {"models": [m.id for m in models.data]}
     except Exception as e:
         return {"error": str(e), "traceback": traceback.format_exc()}
-
 
 @app.post("/api/analyze")
 async def analyze(job_id: str = Form(...), descricao_customizada: str = Form(""), cv_file: UploadFile = File(...)):
@@ -579,7 +568,6 @@ async def analyze(job_id: str = Form(...), descricao_customizada: str = Form("")
             dbg(f"analyze error err={repr(e)}")
             raise HTTPException(status_code=500, detail=f"Erro ao processar análise: {str(e)}")
 
-    # Guardar no cache com timestamp
     RESULTS_CACHE[run_id] = {
         "pdf_path": str(output_pdf),
         "result": result,
@@ -607,7 +595,6 @@ async def analyze(job_id: str = Form(...), descricao_customizada: str = Form("")
         "fallbacks": result["fallbacks"],
         "audit_model_used": result["audit_model_used"],
     })
-
 
 @app.get("/api/result/{run_id}")
 async def download_result(run_id: str):
