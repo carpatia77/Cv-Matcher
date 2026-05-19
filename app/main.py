@@ -39,6 +39,14 @@ TIMEOUT_PDF = float(os.getenv("TIMEOUT_PDF", "30"))
 HTTPX_TIMEOUT = float(os.getenv("HTTPX_TIMEOUT", "300"))
 AUDIT_MAX_TOKENS = int(os.getenv("AUDIT_MAX_TOKENS", "2500"))
 
+DEEPSEEK_MODELS = [
+    "deepseek-ai/deepseek-v4-flash",
+    "deepseek-ai/deepseek-v4-pro",
+    "deepseek-ai/deepseek-v3",
+    "deepseek-ai/deepseek-r1",
+]
+FALLBACK_AUDIT_MODEL = "meta/llama-3.3-70b-instruct"
+
 app = FastAPI(title="ATS Predictor MVP")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -286,6 +294,60 @@ async def calcular_similaridade_semantica(texto1: str, texto2: str, cliente_api:
     return 50.0
 
 
+async def run_audit_with_fallback(client: AsyncOpenAI, prompt_auditoria: str, fallback_audit: str):
+    for model_name in DEEPSEEK_MODELS:
+        dbg(f"audit trying model={model_name}")
+        try:
+            comp_auditoria, audit_err = await timed_call(
+                f"audit-{model_name}",
+                client.chat.completions.create(
+                    model=model_name,
+                    messages=[{"role": "user", "content": prompt_auditoria}],
+                    temperature=0.1,
+                    max_tokens=AUDIT_MAX_TOKENS,
+                ),
+                TIMEOUT_AUDIT,
+                fallback=None,
+            )
+            if comp_auditoria and hasattr(comp_auditoria, "choices"):
+                raw_audit = comp_auditoria.choices[0].message.content or ""
+                dbg(f"audit model={model_name} raw_response={raw_audit[:200]!r}")
+                if raw_audit.strip():
+                    dbg(f"audit SUCCESS with model={model_name}")
+                    return sanitize_text(raw_audit), None, model_name
+                else:
+                    dbg(f"audit model={model_name} returned empty response")
+            else:
+                dbg(f"audit model={model_name} failed: {audit_err}")
+        except Exception as e:
+            dbg(f"audit model={model_name} exception: {type(e).__name__}: {repr(e)}")
+
+    dbg(f"audit all DeepSeek failed, trying fallback model={FALLBACK_AUDIT_MODEL}")
+    try:
+        comp_auditoria, audit_err = await timed_call(
+            "audit-fallback",
+            client.chat.completions.create(
+                model=FALLBACK_AUDIT_MODEL,
+                messages=[{"role": "user", "content": prompt_auditoria}],
+                temperature=0.1,
+                max_tokens=AUDIT_MAX_TOKENS,
+            ),
+            TIMEOUT_AUDIT,
+            fallback=None,
+        )
+        if comp_auditoria and hasattr(comp_auditoria, "choices"):
+            raw_audit = comp_auditoria.choices[0].message.content or ""
+            dbg(f"audit fallback raw_response={raw_audit[:200]!r}")
+            if raw_audit.strip():
+                dbg(f"audit SUCCESS with fallback model={FALLBACK_AUDIT_MODEL}")
+                return sanitize_text(raw_audit), None, FALLBACK_AUDIT_MODEL
+    except Exception as e:
+        dbg(f"audit fallback exception: {type(e).__name__}: {repr(e)}")
+
+    dbg("audit ALL models failed, returning hardcoded fallback")
+    return fallback_audit, RuntimeError("Todos os modelos de auditoria falharam"), "none"
+
+
 async def run_ats_pipeline(input_pdf: str, output_pdf: str, vaga_alvo: str, descricao_vaga: str):
     t0 = time.time()
     dbg(f"pipeline start vaga={vaga_alvo}")
@@ -386,28 +448,10 @@ CURRÍCULO OTIMIZADO:
 - Revise manualmente o currículo e a descrição da vaga.
 """.strip()
 
-    comp_auditoria, audit_err = await timed_call(
-        "audit",
-        client.chat.completions.create(
-            model="deepseek-ai/deepseek-v3",
-            messages=[{"role": "user", "content": prompt_auditoria}],
-            temperature=0.1,
-            max_tokens=AUDIT_MAX_TOKENS,
-        ),
-        TIMEOUT_AUDIT,
-        fallback=None,
+    resposta_auditoria, audit_err, audit_model_used = await run_audit_with_fallback(
+        client, prompt_auditoria, fallback_audit
     )
-
-    if comp_auditoria and hasattr(comp_auditoria, "choices"):
-        raw_audit = comp_auditoria.choices[0].message.content or ""
-        resposta_auditoria = sanitize_text(raw_audit) if raw_audit.strip() else fallback_audit
-        if not raw_audit.strip():
-            audit_err = RuntimeError("Resposta vazia da auditoria")
-    else:
-        resposta_auditoria = fallback_audit
-        if audit_err is None:
-            audit_err = RuntimeError("Falha na chamada da auditoria")
-        dbg(f"audit fallback triggered: {audit_err}")
+    dbg(f"audit final model_used={audit_model_used} has_error={audit_err is not None}")
 
     s_tech = extract_note("SCORE_TECNICO", resposta_auditoria, default=45 if audit_err else 50)
     s_senior = extract_note("SCORE_SENIORIDADE", resposta_auditoria, default=45 if audit_err else 50)
@@ -428,6 +472,7 @@ CURRÍCULO OTIMIZADO:
         "penalidade": penalidade,
         "analise_texto": resposta_auditoria,
         "output_pdf": output_pdf,
+        "audit_model_used": audit_model_used,
         "fallbacks": {
             "optimization": opt_err is not None,
             "audit": audit_err is not None,
@@ -502,6 +547,10 @@ async def analyze(job_id: str = Form(...), descricao_customizada: str = Form("")
     RESULTS[run_id] = {"pdf_path": str(output_pdf), "result": result}
     dbg(f"analyze done run_id={run_id}")
 
+    headline = "Análise concluída com sucesso."
+    if result["fallbacks"]["audit"]:
+        headline = f"Análise com fallback (modelo: {result['audit_model_used']})."
+
     return JSONResponse(content={
         "status": "ok",
         "run_id": run_id,
@@ -512,13 +561,14 @@ async def analyze(job_id: str = Form(...), descricao_customizada: str = Form("")
         "s_senior": result["s_senior"],
         "s_nlp": result["s_nlp"],
         "penalidade": result["penalidade"],
-        "headline": "Análise concluída com sucesso." if not result["fallbacks"]["audit"] else "Análise concluída com fallback de auditoria.",
-        "detail": "O PDF foi gerado e está pronto para download.",
+        "headline": headline,
+        "detail": f"Modelo auditoria: {result['audit_model_used']}. PDF pronto para download.",
         "fallbacks": result["fallbacks"],
+        "audit_model_used": result["audit_model_used"],
     })
 
 
-@app.get("/api/result/{run_id}")
+@app.get("//api/result/{run_id}")
 async def download_result(run_id: str):
     item = RESULTS.get(run_id)
     if not item:
