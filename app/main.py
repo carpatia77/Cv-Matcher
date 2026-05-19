@@ -10,7 +10,8 @@ import fitz
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from fasando um `run_id` temporário. No FastAPI, esse fi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from fpdf import FPDF
 from openai import OpenAI
 
@@ -66,6 +67,7 @@ class ReportPDF(FPDF):
 def sanitize_text(text: str) -> str:
     if text is None:
         return ""
+
     text = str(text)
     subs = {
         "\u2013": "-",
@@ -83,8 +85,10 @@ def sanitize_text(text: str) -> str:
         "\u00a0": " ",
         "\t": "    ",
     }
+
     for k, v in subs.items():
         text = text.replace(k, v)
+
     text = re.sub(r"[^\S\r\n]+", " ", text)
     text = "\n".join(line.rstrip() for line in text.splitlines())
 
@@ -253,7 +257,8 @@ def calcular_similaridade_semantica(texto1: str, texto2: str, cliente_api: OpenA
 
 def run_ats_pipeline(input_pdf: str, output_pdf: str, vaga_alvo: str, descricao_vaga: str):
     cv_text_raw = extract_text_from_pdf(input_pdf)
-    if not cv_ando um `run_id` temporário. No FastAPI, esse fão foi possível extrair texto do PDF enviado.")
+    if not cv_text_raw.strip():
+        raise RuntimeError("Não foi possível extrair texto do PDF enviado.")
 
     client = get_client()
     DELIMITADOR_CV = "=== CURRICULO_OTIMIZADO_INICIO ==="
@@ -269,27 +274,67 @@ CURRÍCULO ORIGINAL: {cv_text_raw}
 Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simples e sem caracteres decorativos.
 """
 
-    comp_otimizacao = client.ando um `run_id` temporário. No FastAPI, esse fama-3.3-70b-instruct",
-        messando um `run_id` temporário. No FastAPI, esse facao}],
-        temperaando um `run_id` temporário. No FastAPI, esse fmporário. No FastAPI, esse f_text(comp_otimizacao.choices[0].message.content)
-    cv_otimiando um `run_id` temporário. No FastAPI, esse fDOR_CV, 1)ando um `run_id` temporário. No FastAPI, esse fzacao else resposta_otimizacao.strando um `run_id` temporário. No FastAPI, esse fca(cv_otimizado_texto, descrando um `run_id` temporário. No FastAPI, esse f
-Você ando um `run_id` temporário. No FastAPI, esse fun_id` temporário. No FastAPI, esse fmporário. No FastAPI, esse fmporário. No FastAPI, esse fFastAPI, esse f_texto[:2500]}
+    comp_otimizacao = client.chat.completions.create(
+        model="meta/llama-3.3-70b-instruct",
+        messages=[{"role": "user", "content": prompt_otimizacao}],
+        temperature=0.2,
+        max_tokens=3000,
+    )
+    resposta_otimizacao = sanitize_text(comp_otimizacao.choices[0].message.content)
+    cv_otimizado_texto = resposta_otimizacao.split(DELIMITADOR_CV, 1)[1].strip() if DELIMITADOR_CV in resposta_otimizacao else resposta_otimizacao.strip()
 
-Retorne EXATAMENTE estas ando um `run_id` temporário. No FastAPI, esse fo. No FastAPI, esse frun_id` temporário. No FastAPI, esse f um `run_id` temporário. No FastAPI, esse fo título "**ANÁLISando um `run_id` temporário. No FastAPI, esse ftemporário. No FastAPI, esse fauditando um `run_id` temporário. No FastAPI, esse fid` temporário. No FastAPI, esse fando um `run_id` temporário. No FastAPI, esse ft": prompt_auditoria}],
-        temperaando um `run_id` temporário. No FastAPI, esse fspando um `run_id` temporário. No FastAPI, esse fo. No FastAPI, esse ftando um `run_id` temporário. No FastAPI, esse f, respando um `run_id` temporário. No FastAPI, esse fAPI, esse fDADE", respostaando um `run_id` temporário. No FastAPI, esse f` temporário. No FastAPI, esse frun_id` temporário. No FastAPI, esse fm `run_id` temporário. No FastAPI, esse fporário. No FastAPI, esse forário. No FastAPI, esse f `run_id` temporário. No FastAPI, esse fo. No FastAPI, esse fs_ando um `run_id` temporário. No FastAPI, esse fstAPI, esse fo um `run_id` temporário. No FastAPI, esse fd` temporário. No FastAPI, esse fcore_final,
+    s_nlp = calcular_similaridade_semantica(cv_otimizado_texto, descricao_vaga, client)
+
+    prompt_auditoria = f"""
+Você é um Headhunter Executivo. Analise a aderência do CURRÍCULO à VAGA de {vaga_alvo}. Seja altamente crítico.
+
+VAGA: {descricao_vaga}
+CURRÍCULO: {cv_otimizado_texto[:2500]}
+
+Retorne EXATAMENTE estas tags:
+[SCORE_TECNICO]XX[/SCORE_TECNICO]
+[SCORE_SENIORIDADE]XX[/SCORE_SENIORIDADE]
+[PENALIDADE_FRICCAO]XX[/PENALIDADE_FRICCAO]
+
+Após as tags, escreva o título "**ANÁLISE DE RISCO DO RECRUTADOR**" e justifique os motivos das notas.
+"""
+
+    comp_auditoria = client.chat.completions.create(
+        model="deepseek-ai/deepseek-v4-flash",
+        messages=[{"role": "user", "content": prompt_auditoria}],
+        temperature=0.1,
+        max_tokens=1500,
+    )
+    resposta_auditoria = sanitize_text(comp_auditoria.choices[0].message.content)
+
+    s_tech = extract_note("SCORE_TECNICO", resposta_auditoria)
+    s_senior = extract_note("SCORE_SENIORIDADE", resposta_auditoria)
+    penalidade = extract_note("PENALIDADE_FRICCAO", resposta_auditoria)
+    score_final = round((s_tech * 0.45) + (s_senior * 0.35) + (s_nlp * 0.20) - penalidade, 1)
+    score_final = max(0.0, min(100.0, score_final))
+
+    generate_pdf(vaga_alvo, score_final, s_tech, s_senior, s_nlp, penalidade, resposta_auditoria, output_pdf)
+
+    return {
+        "vaga_alvo": vaga_alvo,
+        "score_final": score_final,
         "s_tech": s_tech,
         "s_senior": s_senior,
         "s_nlp": s_nlp,
         "penalidade": penalidade,
-        "analise_tando um `run_id` temporário. No FastAPI, esse f: output_pdf,
+        "analise_texto": resposta_auditoria,
+        "output_pdf": output_pdf,
     }
 
 
-@app.get("/", respando um `run_id` temporário. No FastAPI, esse f: Request):
-    return templates.TemplateRespando um `run_id` temporário. No FastAPI, esse ft={"app_env": APP_ENV})
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
+    return templates.TemplateResponse(request=request, name="index.html", context={"app_env": APP_ENV})
 
 
-@app.get("/api/healando um `run_id` temporário. No FastAPI, esse fo FastAPI, esse fENV}
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "env": APP_ENV}
 
 
 @app.get("/api/jobs")
@@ -297,7 +342,9 @@ async def list_jobs():
     return JSONResponse(load_jobs())
 
 
-@app.post("/api/analyando um `run_id` temporário. No FastAPI, esse f...),
+@app.post("/api/analyze")
+async def analyze(
+    job_id: str = Form(...),
     descricao_customizada: str = Form(""),
     cv_file: UploadFile = File(...),
 ):
@@ -308,8 +355,11 @@ async def list_jobs():
         raise HTTPException(status_code=400, detail="Envie um arquivo PDF válido.")
 
     jobs = load_jobs()
-    selected_job = next((j for j in ando um `run_id` temporário. No FastAPI, esse flected_job and not descricao_customizada.strip():
-        raise HTTPException(status_code=400, detail="Vaga inválida e sem descrando um `run_id` temporário. No FastAPI, esse fricao_customizada.strip() or selected_job["descricao"]
+    selected_job = next((j for j in jobs if j["id"] == job_id), None)
+    if not selected_job and not descricao_customizada.strip():
+        raise HTTPException(status_code=400, detail="Vaga inválida e sem descrição customizada.")
+
+    descricao_final = descricao_customizada.strip() or selected_job["descricao"]
     vaga_alvo = selected_job["titulo"] if selected_job else "Vaga Customizada"
     run_id = uuid.uuid4().hex
     output_pdf = TMP_DIR / f"{run_id}.pdf"
