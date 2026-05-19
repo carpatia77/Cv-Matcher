@@ -31,11 +31,11 @@ NVIDIA_BASE_URL = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com
 APP_ENV = os.getenv("APP_ENV", "development")
 
 TIMEOUT_EXTRACTION = float(os.getenv("TIMEOUT_EXTRACTION", "20"))
-TIMEOUT_OPTIMIZATION = float(os.getenv("TIMEOUT_OPTIMIZATION", "90"))
-TIMEOUT_EMBEDDING = float(os.getenv("TIMEOUT_EMBEDDING", "45"))
-TIMEOUT_AUDIT = float(os.getenv("TIMEOUT_AUDIT", "240"))
+TIMEOUT_OPTIMIZATION = float(os.getenv("TIMEOUT_OPTIMIZATION", "120"))
+TIMEOUT_EMBEDDING = float(os.getenv("TIMEOUT_EMBEDDING", "60"))
 TIMEOUT_PDF = float(os.getenv("TIMEOUT_PDF", "30"))
-HTTPX_TIMEOUT = float(os.getenv("HTTPX_TIMEOUT", "240"))
+HTTPX_TIMEOUT = float(os.getenv("HTTPX_TIMEOUT", "300"))
+AUDIT_MAX_TOKENS = int(os.getenv("AUDIT_MAX_TOKENS", "2500"))
 
 app = FastAPI(title="ATS Predictor MVP")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -81,7 +81,6 @@ class ReportPDF(FPDF):
 def sanitize_text(text: str) -> str:
     if text is None:
         return ""
-
     text = str(text)
     subs = {
         "\u2013": "-",
@@ -99,10 +98,8 @@ def sanitize_text(text: str) -> str:
         "\u00a0": " ",
         "\t": "    ",
     }
-
     for k, v in subs.items():
         text = text.replace(k, v)
-
     text = re.sub(r"[^\S\r\n]+", " ", text)
     text = "\n".join(line.rstrip() for line in text.splitlines())
     return text.strip()
@@ -142,7 +139,9 @@ def configure_font(pdf: FPDF):
 
 def pdf_text(pdf: FPDF, txt: str) -> str:
     txt = sanitize_text(txt)
-    return txt if getattr(pdf, "main_font", "Helvetica") == "Uni" else txt.encode("latin-1", "replace").decode("latin-1")
+    if getattr(pdf, "main_font", "Helvetica") == "Uni":
+        return txt
+    return txt.encode("latin-1", "replace").decode("latin-1")
 
 
 def safe_cell(pdf: FPDF, h: float, txt: str, **kwargs):
@@ -233,13 +232,20 @@ def extract_text_from_pdf(file_path: str) -> str:
 def get_client() -> OpenAI:
     if not NVIDIA_API_KEY:
         raise RuntimeError("NVIDIA_API_KEY não configurada no ambiente.")
-    transport = httpx.Client(timeout=httpx.Timeout(HTTPX_TIMEOUT))
+    timeout = httpx.Timeout(
+        timeout=HTTPX_TIMEOUT,
+        connect=30.0,
+        read=HTTPX_TIMEOUT,
+        write=30.0,
+        pool=30.0,
+    )
+    http_client = httpx.Client(timeout=timeout)
     return OpenAI(
         base_url=NVIDIA_BASE_URL,
         api_key=NVIDIA_API_KEY,
         timeout=HTTPX_TIMEOUT,
         max_retries=0,
-        http_client=transport,
+        http_client=http_client,
     )
 
 
@@ -396,7 +402,7 @@ CURRÍCULO OTIMIZADO:
             model="deepseek-ai/deepseek-v4-flash",
             messages=[{"role": "user", "content": prompt_auditoria}],
             temperature=0.1,
-            max_tokens=2500,
+            max_tokens=AUDIT_MAX_TOKENS,
         )
         raw_audit = comp_auditoria.choices[0].message.content if comp_auditoria and comp_auditoria.choices else ""
         dbg(f"audit raw response={raw_audit[:800]!r}")
