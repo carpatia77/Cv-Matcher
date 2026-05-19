@@ -5,6 +5,7 @@ import re
 import shutil
 import tempfile
 import time
+import traceback
 import uuid
 from pathlib import Path
 
@@ -16,7 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fpdf import FPDF
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 APP_DIR = BASE_DIR / "app"
@@ -33,6 +34,7 @@ APP_ENV = os.getenv("APP_ENV", "development")
 TIMEOUT_EXTRACTION = float(os.getenv("TIMEOUT_EXTRACTION", "20"))
 TIMEOUT_OPTIMIZATION = float(os.getenv("TIMEOUT_OPTIMIZATION", "120"))
 TIMEOUT_EMBEDDING = float(os.getenv("TIMEOUT_EMBEDDING", "60"))
+TIMEOUT_AUDIT = float(os.getenv("TIMEOUT_AUDIT", "120"))
 TIMEOUT_PDF = float(os.getenv("TIMEOUT_PDF", "30"))
 HTTPX_TIMEOUT = float(os.getenv("HTTPX_TIMEOUT", "300"))
 AUDIT_MAX_TOKENS = int(os.getenv("AUDIT_MAX_TOKENS", "2500"))
@@ -139,9 +141,7 @@ def configure_font(pdf: FPDF):
 
 def pdf_text(pdf: FPDF, txt: str) -> str:
     txt = sanitize_text(txt)
-    if getattr(pdf, "main_font", "Helvetica") == "Uni":
-        return txt
-    return txt.encode("latin-1", "replace").decode("latin-1")
+    return txt if getattr(pdf, "main_font", "Helvetica") == "Uni" else txt.encode("latin-1", "replace").decode("latin-1")
 
 
 def safe_cell(pdf: FPDF, h: float, txt: str, **kwargs):
@@ -229,23 +229,14 @@ def extract_text_from_pdf(file_path: str) -> str:
     return " ".join(text.split())
 
 
-def get_client() -> OpenAI:
+async def get_async_client() -> AsyncOpenAI:
     if not NVIDIA_API_KEY:
         raise RuntimeError("NVIDIA_API_KEY não configurada no ambiente.")
-    timeout = httpx.Timeout(
-        timeout=HTTPX_TIMEOUT,
-        connect=30.0,
-        read=HTTPX_TIMEOUT,
-        write=30.0,
-        pool=30.0,
-    )
-    http_client = httpx.Client(timeout=timeout)
-    return OpenAI(
+    return AsyncOpenAI(
         base_url=NVIDIA_BASE_URL,
         api_key=NVIDIA_API_KEY,
-        timeout=HTTPX_TIMEOUT,
+        timeout=httpx.Timeout(HTTPX_TIMEOUT, connect=30.0, read=HTTPX_TIMEOUT, write=30.0, pool=30.0),
         max_retries=0,
-        http_client=http_client,
     )
 
 
@@ -259,8 +250,9 @@ async def timed_call(label, coro, timeout_s, fallback=None):
         dbg(f"{label} timeout")
         return fallback, f"timeout:{label}"
     except Exception as e:
-        dbg(f"{label} error {repr(e)}")
-        return fallback, f"error:{label}:{repr(e)}"
+        dbg(f"{label} error type={type(e).__name__} msg={repr(e)}")
+        dbg(f"{label} traceback: {traceback.format_exc()}")
+        return fallback, f"error:{label}:{type(e).__name__}:{repr(e)}"
 
 
 async def extract_text_with_timeout(file_path: str):
@@ -271,7 +263,7 @@ async def generate_pdf_with_timeout(*args, **kwargs):
     return await asyncio.wait_for(asyncio.to_thread(generate_pdf, *args, **kwargs), timeout=TIMEOUT_PDF)
 
 
-def calcular_similaridade_semantica(texto1: str, texto2: str, cliente_api: OpenAI) -> float:
+async def calcular_similaridade_semantica(texto1: str, texto2: str, cliente_api: AsyncOpenAI) -> float:
     texto1 = sanitize_text(texto1)[:2000]
     texto2 = sanitize_text(texto2)[:2000]
     tentativas = [
@@ -282,8 +274,8 @@ def calcular_similaridade_semantica(texto1: str, texto2: str, cliente_api: OpenA
     last_err = None
     for t in tentativas:
         try:
-            resp1 = cliente_api.embeddings.create(model=t["model"], input=texto1, **t["payload"])
-            resp2 = cliente_api.embeddings.create(model=t["model"], input=texto2, **t["payload"])
+            resp1 = await cliente_api.embeddings.create(model=t["model"], input=texto1, **t["payload"])
+            resp2 = await cliente_api.embeddings.create(model=t["model"], input=texto2, **t["payload"])
             v1 = resp1.data[0].embedding
             v2 = resp2.data[0].embedding
             return round(max(0.0, min(100.0, cosine_sim(v1, v2) * 100)), 2)
@@ -302,7 +294,7 @@ async def run_ats_pipeline(input_pdf: str, output_pdf: str, vaga_alvo: str, desc
     if not cv_text_raw.strip():
         raise RuntimeError("Não foi possível extrair texto do PDF enviado.")
 
-    client = get_client()
+    client = await get_async_client()
     DELIMITADOR_CV = "=== CURRICULO_OTIMIZADO_INICIO ==="
 
     prompt_otimizacao = f"""
@@ -319,13 +311,11 @@ Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simple
     fallback_cv = sanitize_text(cv_text_raw)
     comp_otimizacao, opt_err = await timed_call(
         "optimization",
-        asyncio.to_thread(
-            lambda: client.chat.completions.create(
-                model="meta/llama-3.3-70b-instruct",
-                messages=[{"role": "user", "content": prompt_otimizacao}],
-                temperature=0.2,
-                max_tokens=3000,
-            )
+        client.chat.completions.create(
+            model="meta/llama-3.3-70b-instruct",
+            messages=[{"role": "user", "content": prompt_otimizacao}],
+            temperature=0.2,
+            max_tokens=3000,
         ),
         TIMEOUT_OPTIMIZATION,
         fallback=None,
@@ -344,7 +334,7 @@ Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simple
 
     try:
         s_nlp = await asyncio.wait_for(
-            asyncio.to_thread(calcular_similaridade_semantica, cv_otimizado_texto, descricao_vaga, client),
+            calcular_similaridade_semantica(cv_otimizado_texto, descricao_vaga, client),
             timeout=TIMEOUT_EMBEDDING,
         )
     except Exception as e:
@@ -396,23 +386,28 @@ CURRÍCULO OTIMIZADO:
 - Revise manualmente o currículo e a descrição da vaga.
 """.strip()
 
-    try:
-        dbg("audit request start")
-        comp_auditoria = client.chat.completions.create(
-            model="deepseek-ai/deepseek-v4-flash",
+    comp_auditoria, audit_err = await timed_call(
+        "audit",
+        client.chat.completions.create(
+            model="deepseek-ai/deepseek-v3",
             messages=[{"role": "user", "content": prompt_auditoria}],
             temperature=0.1,
             max_tokens=AUDIT_MAX_TOKENS,
-        )
-        raw_audit = comp_auditoria.choices[0].message.content if comp_auditoria and comp_auditoria.choices else ""
-        dbg(f"audit raw response={raw_audit[:800]!r}")
+        ),
+        TIMEOUT_AUDIT,
+        fallback=None,
+    )
+
+    if comp_auditoria and hasattr(comp_auditoria, "choices"):
+        raw_audit = comp_auditoria.choices[0].message.content or ""
         resposta_auditoria = sanitize_text(raw_audit) if raw_audit.strip() else fallback_audit
-        audit_err = None if raw_audit.strip() else RuntimeError("Resposta vazia da auditoria")
-        dbg("audit response ok")
-    except Exception as e:
-        dbg(f"audit fallback err={repr(e)}")
+        if not raw_audit.strip():
+            audit_err = RuntimeError("Resposta vazia da auditoria")
+    else:
         resposta_auditoria = fallback_audit
-        audit_err = e
+        if audit_err is None:
+            audit_err = RuntimeError("Falha na chamada da auditoria")
+        dbg(f"audit fallback triggered: {audit_err}")
 
     s_tech = extract_note("SCORE_TECNICO", resposta_auditoria, default=45 if audit_err else 50)
     s_senior = extract_note("SCORE_SENIORIDADE", resposta_auditoria, default=45 if audit_err else 50)
@@ -453,6 +448,18 @@ async def health():
 @app.get("/api/jobs")
 async def list_jobs():
     return JSONResponse(load_jobs())
+
+
+@app.get("/api/debug/models")
+async def debug_models():
+    if APP_ENV not in ("development", "dev"):
+        raise HTTPException(status_code=403, detail="Apenas em desenvolvimento.")
+    try:
+        client = await get_async_client()
+        models = await client.models.list()
+        return {"models": [m.id for m in models.data]}
+    except Exception as e:
+        return {"error": str(e), "traceback": traceback.format_exc()}
 
 
 @app.post("/api/analyze")
@@ -505,7 +512,7 @@ async def analyze(job_id: str = Form(...), descricao_customizada: str = Form("")
         "s_senior": result["s_senior"],
         "s_nlp": result["s_nlp"],
         "penalidade": result["penalidade"],
-        "headline": "Análise concluída com sucesso.",
+        "headline": "Análise concluída com sucesso." if not result["fallbacks"]["audit"] else "Análise concluída com fallback de auditoria.",
         "detail": "O PDF foi gerado e está pronto para download.",
         "fallbacks": result["fallbacks"],
     })
