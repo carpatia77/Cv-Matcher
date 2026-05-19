@@ -35,14 +35,14 @@ NVIDIA_BASE_URL = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com
 APP_ENV = os.getenv("APP_ENV", "development")
 
 TIMEOUT_EXTRACTION = float(os.getenv("TIMEOUT_EXTRACTION", "20"))
-TIMEOUT_OPTIMIZATION = float(os.getenv("TIMEOUT_OPTIMIZATION", "90"))   # reduzido
+TIMEOUT_OPTIMIZATION = float(os.getenv("TIMEOUT_OPTIMIZATION", "90"))
 TIMEOUT_EMBEDDING = float(os.getenv("TIMEOUT_EMBEDDING", "30"))
-TIMEOUT_AUDIT = float(os.getenv("TIMEOUT_AUDIT", "90"))                 # reduzido
+TIMEOUT_AUDIT = float(os.getenv("TIMEOUT_AUDIT", "120"))   # aumentado para DeepSeek
 TIMEOUT_PDF = float(os.getenv("TIMEOUT_PDF", "30"))
-HTTPX_TIMEOUT = float(os.getenv("HTTPX_TIMEOUT", "180"))                # reduzido para 180s
-AUDIT_MAX_TOKENS = int(os.getenv("AUDIT_MAX_TOKENS", "2000"))           # reduzido
+HTTPX_TIMEOUT = float(os.getenv("HTTPX_TIMEOUT", "240"))
+AUDIT_MAX_TOKENS = int(os.getenv("AUDIT_MAX_TOKENS", "1500"))  # reduzido
 
-# Modelos DeepSeek disponíveis (apenas os confirmados no catálogo)
+# Modelos DeepSeek (apenas os confirmados no catálogo NVIDIA)
 DEEPSEEK_MODELS = [
     "deepseek-ai/deepseek-v4-flash",
     "deepseek-ai/deepseek-v4-pro",
@@ -70,14 +70,13 @@ def cleanup_old_results():
                if now - item["created_at"] > timedelta(seconds=RESULTS_TTL_SECONDS)]
     for rid in expired:
         del RESULTS_CACHE[rid]
-        if expired:
-            dbg(f"cache: removed {len(expired)} expired results")
+    if expired:
+        dbg(f"cache: removed {len(expired)} expired results")
 
 def sanitize_text(text: str) -> str:
     if not text:
         return ""
     text = str(text)
-    # Substitui caracteres Unicode problemáticos
     subs = {
         "\u2013": "-", "\u2014": "-", "\u201c": '"', "\u201d": '"',
         "\u2018": "'", "\u2019": "'", "\u2022": "-", "\u2023": "-",
@@ -97,12 +96,10 @@ def strip_tags(texto: str) -> str:
     return sanitize_text(texto)
 
 def extract_note(tag: str, text: str, default: int = 0) -> int:
-    # Regex flexível: permite espaços antes/depois do número
     pattern = rf"\[{tag}\]\s*(\d+)\s*\[/{tag}\]"
     m = re.search(pattern, text, re.IGNORECASE)
     if m:
         return int(m.group(1))
-    # Fallback simples: busca o primeiro número após a tag
     m2 = re.search(rf"{tag}[^\d]*(\d+)", text, re.IGNORECASE)
     return int(m2.group(1)) if m2 else default
 
@@ -223,7 +220,7 @@ def load_jobs():
         default_jobs = [
             {"id": "dev_python", "titulo": "Desenvolvedor Python Pleno", "descricao": "Experiência com FastAPI, PostgreSQL, Docker, testes unitários."},
             {"id": "data_scientist", "titulo": "Cientista de Dados", "descricao": "Machine Learning, Python, SQL, visualização de dados."},
-            {"id": "arquiteto-ia", "titulo": "Arquiteto de IA", "descricao": "Experiência em arquitetura de sistemas de IA, LLMs, MLOps, cloud (AWS/GCP/Azure)."},
+            {"id": "arquiteto-ia", "titulo": "Arquiteto de IA", "descricao": "Experiência em arquitetura de sistemas de IA, LLMs, MLOps, cloud."},
         ]
         with open(JOBS_FILE, "w", encoding="utf-8") as f:
             json.dump(default_jobs, f, indent=2, ensure_ascii=False)
@@ -248,7 +245,7 @@ async def get_async_client() -> AsyncOpenAI:
         base_url=NVIDIA_BASE_URL,
         api_key=NVIDIA_API_KEY,
         timeout=httpx.Timeout(HTTPX_TIMEOUT, connect=30.0, read=HTTPX_TIMEOUT, write=30.0, pool=30.0),
-        max_retries=1,                     # uma única repetição
+        max_retries=1,
     )
 
 # ---------- TIMED CALL (CONTROLE DE TIMEOUT) ----------
@@ -267,16 +264,14 @@ async def timed_call(label, coro, timeout_s, fallback=None):
         return fallback, f"error:{label}:{type(e).__name__}:{repr(e)}"
 
 # ---------- SIMILARIDADE SEMÂNTICA (CORRIGIDA) ----------
-# Cache simples para evitar recálculos repetidos (mesmo par de textos)
 @lru_cache(maxsize=128)
 def _embedding_cache_key(text1_hash, text2_hash):
-    return None  # placeholder, usamos hash dos textos
+    return None
 
 async def calcular_similaridade_semantica(texto1: str, texto2: str, cliente_api: AsyncOpenAI) -> float:
     texto1 = sanitize_text(texto1)[:2000]
     texto2 = sanitize_text(texto2)[:2000]
 
-    # Modelos de embedding da NVIDIA (sem input_type, testados)
     tentativas = [
         {"model": "nvidia/nv-embed-v1", "payload": {}},
         {"model": "nvidia/nv-embedqa-mistral-7b-v2", "payload": {}},
@@ -311,8 +306,9 @@ async def calcular_similaridade_semantica(texto1: str, texto2: str, cliente_api:
 
 # ---------- AUDITORIA COM FALLBACK (DEEPSEEK E META) ----------
 async def run_audit_with_fallback(client: AsyncOpenAI, prompt_auditoria: str, fallback_audit: str):
+    # Tentar modelos DeepSeek com timeout maior
     for model_name in DEEPSEEK_MODELS:
-        dbg(f"audit trying model={model_name}")
+        dbg(f"audit trying model={model_name} with timeout={TIMEOUT_AUDIT}s")
         try:
             comp_auditoria, audit_err = await timed_call(
                 f"audit-{model_name}",
@@ -322,22 +318,27 @@ async def run_audit_with_fallback(client: AsyncOpenAI, prompt_auditoria: str, fa
                     temperature=0.1,
                     max_tokens=AUDIT_MAX_TOKENS,
                 ),
-                TIMEOUT_AUDIT,
+                timeout_s=TIMEOUT_AUDIT,
                 fallback=None,
             )
             if comp_auditoria and hasattr(comp_auditoria, "choices"):
                 raw_audit = comp_auditoria.choices[0].message.content or ""
+                dbg(f"audit model={model_name} raw response length={len(raw_audit)}")
                 if raw_audit.strip():
                     dbg(f"audit SUCCESS with model={model_name}")
                     return sanitize_text(raw_audit), None, model_name
                 else:
-                    dbg(f"audit model={model_name} returned empty response")
+                    dbg(f"audit model={model_name} returned EMPTY response")
             else:
-                dbg(f"audit model={model_name} failed: {audit_err}")
+                dbg(f"audit model={model_name} failed: audit_err={audit_err}")
+        except asyncio.TimeoutError:
+            dbg(f"audit model={model_name} TIMEOUT after {TIMEOUT_AUDIT}s")
         except Exception as e:
             dbg(f"audit model={model_name} exception: {type(e).__name__}: {repr(e)}")
+            if "rate_limit" in str(e).lower():
+                await asyncio.sleep(5)
 
-    # Fallback para Llama 3.3
+    # Fallback para Llama 3.3 (mais lento, mas confiável)
     dbg(f"audit all DeepSeek failed, trying fallback model={FALLBACK_AUDIT_MODEL}")
     try:
         comp_auditoria, audit_err = await timed_call(
@@ -346,9 +347,9 @@ async def run_audit_with_fallback(client: AsyncOpenAI, prompt_auditoria: str, fa
                 model=FALLBACK_AUDIT_MODEL,
                 messages=[{"role": "user", "content": prompt_auditoria}],
                 temperature=0.1,
-                max_tokens=AUDIT_MAX_TOKENS,
+                max_tokens=AUDIT_MAX_TOKENS + 500,
             ),
-            TIMEOUT_AUDIT,
+            timeout_s=TIMEOUT_AUDIT + 30,
             fallback=None,
         )
         if comp_auditoria and hasattr(comp_auditoria, "choices"):
@@ -367,7 +368,6 @@ async def run_ats_pipeline(input_pdf: str, output_pdf: str, vaga_alvo: str, desc
     t0 = time.time()
     dbg(f"pipeline start vaga={vaga_alvo}")
 
-    # Extração do texto do PDF
     cv_text_raw = await extract_text_with_timeout(input_pdf)
     dbg(f"pdf extract done len={len(cv_text_raw)} elapsed={time.time()-t0:.2f}s")
     if not cv_text_raw.strip():
@@ -395,7 +395,7 @@ Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simple
                 model="meta/llama-3.3-70b-instruct",
                 messages=[{"role": "user", "content": prompt_otimizacao}],
                 temperature=0.2,
-                max_tokens=2500,   # reduzido para velocidade
+                max_tokens=2500,
             ),
             TIMEOUT_OPTIMIZATION,
             fallback=None,
@@ -422,35 +422,35 @@ Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simple
             dbg(f"similarity fallback err={repr(e)}")
             s_nlp = 50.0
 
-        # ---- 3. AUDITORIA (DEEPSEEK) ----
-        # Prompt mais conciso para acelerar
+        # ---- 3. AUDITORIA (DEEPSEEK ou FALLBACK) ----
+        # Prompt mais curto para DeepSeek
         prompt_auditoria = f"""
-Você é Headhunter Executivo. Produza uma auditoria detalhada para decisão de recrutamento.
+Você é Headhunter Executivo. Avalie o candidato para a vaga.
 
-Requisitos:
-1. Inclua exatamente estas tags:
-[SCORE_TECNICO]XX[/SCORE_TECNICO]
-[SCORE_SENIORIDADE]XX[/SCORE_SENIORIDADE]
-[PENALIDADE_FRICCAO]XX[/PENALIDADE_FRICCAO]
+REGRAS:
+1. OBRIGATORIAMENTE comece com:
+[SCORE_TECNICO]0-100[/SCORE_TECNICO]
+[SCORE_SENIORIDADE]0-100[/SCORE_SENIORIDADE]
+[PENALIDADE_FRICCAO]0-30[/PENALIDADE_FRICCAO]
 
 2. Título: **ANÁLISE DE RISCO DO RECRUTADOR**
 
-3. Conteúdo obrigatório:
+3. Conteúdo (use bullets):
 - Resumo executivo
-- Hard skills e gaps técnicos
+- Hard skills & gaps
 - Senioridade e maturidade
-- Riscos e fricções de mercado
+- Riscos e fricções
 - Forças competitivas
-- Fragilidades
-- Recomendações práticas
+- Fragilidades que travam shortlist
+- Recomendações práticas (3 itens)
 - Conclusão final com parecer
 
-Seja crítico e detalhado. Não invente experiências.
+Seja crítico. NÃO invente.
 
-VAGA: {descricao_vaga}
+VAGA: {descricao_vaga[:500]}
 
 CURRÍCULO OTIMIZADO:
-{cv_otimizado_texto[:2000]}   # reduzido para 2000 caracteres
+{cv_otimizado_texto[:1500]}
 """.strip()
 
         fallback_audit = """
@@ -501,7 +501,6 @@ CURRÍCULO OTIMIZADO:
         await client.close()
         dbg("async client closed")
 
-# ---------- FUNÇÃO DE GERAÇÃO DE PDF COM TIMEOUT ----------
 async def generate_pdf_with_timeout(*args, **kwargs):
     return await asyncio.wait_for(asyncio.to_thread(generate_pdf, *args, **kwargs), timeout=TIMEOUT_PDF)
 
