@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 
 import fitz
+import httpx
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -32,8 +33,9 @@ APP_ENV = os.getenv("APP_ENV", "development")
 TIMEOUT_EXTRACTION = float(os.getenv("TIMEOUT_EXTRACTION", "20"))
 TIMEOUT_OPTIMIZATION = float(os.getenv("TIMEOUT_OPTIMIZATION", "90"))
 TIMEOUT_EMBEDDING = float(os.getenv("TIMEOUT_EMBEDDING", "45"))
-TIMEOUT_AUDIT = float(os.getenv("TIMEOUT_AUDIT", "180"))
+TIMEOUT_AUDIT = float(os.getenv("TIMEOUT_AUDIT", "240"))
 TIMEOUT_PDF = float(os.getenv("TIMEOUT_PDF", "30"))
+HTTPX_TIMEOUT = float(os.getenv("HTTPX_TIMEOUT", "240"))
 
 app = FastAPI(title="ATS Predictor MVP")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -140,9 +142,7 @@ def configure_font(pdf: FPDF):
 
 def pdf_text(pdf: FPDF, txt: str) -> str:
     txt = sanitize_text(txt)
-    if getattr(pdf, "main_font", "Helvetica") == "Uni":
-        return txt
-    return txt.encode("latin-1", "replace").decode("latin-1")
+    return txt if getattr(pdf, "main_font", "Helvetica") == "Uni" else txt.encode("latin-1", "replace").decode("latin-1")
 
 
 def safe_cell(pdf: FPDF, h: float, txt: str, **kwargs):
@@ -233,11 +233,13 @@ def extract_text_from_pdf(file_path: str) -> str:
 def get_client() -> OpenAI:
     if not NVIDIA_API_KEY:
         raise RuntimeError("NVIDIA_API_KEY não configurada no ambiente.")
+    transport = httpx.Client(timeout=httpx.Timeout(HTTPX_TIMEOUT))
     return OpenAI(
         base_url=NVIDIA_BASE_URL,
         api_key=NVIDIA_API_KEY,
-        timeout=180.0,
+        timeout=HTTPX_TIMEOUT,
         max_retries=0,
+        http_client=transport,
     )
 
 
@@ -317,7 +319,6 @@ Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simple
                 messages=[{"role": "user", "content": prompt_otimizacao}],
                 temperature=0.2,
                 max_tokens=3000,
-                request_timeout=120,
             )
         ),
         TIMEOUT_OPTIMIZATION,
@@ -347,18 +348,17 @@ Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simple
     prompt_auditoria = f"""
 Você é um Headhunter Executivo sênior e extremamente crítico.
 Sua missão é produzir uma auditoria minuciosa, detalhada, profunda e útil para decisão de recrutamento.
-Não economize na análise, mas mantenha clareza, objetividade e estrutura.
 
-INSTRUÇÕES OBRIGATÓRIAS:
-1. Retorne primeiro as três tags exatamente neste formato:
+Requisitos obrigatórios:
+1. Retorne primeiro exatamente estas tags:
 [SCORE_TECNICO]XX[/SCORE_TECNICO]
 [SCORE_SENIORIDADE]XX[/SCORE_SENIORIDADE]
 [PENALIDADE_FRICCAO]XX[/PENALIDADE_FRICCAO]
 
-2. Depois das tags, escreva obrigatoriamente o título:
+2. Depois escreva o título:
 **ANÁLISE DE RISCO DO RECRUTADOR**
 
-3. Em seguida, produza uma análise extensa com as seguintes seções:
+3. Depois do título, escreva:
 - Resumo executivo da aderência.
 - Leitura de hard skills e gaps técnicos.
 - Leitura de senioridade, autonomia e maturidade.
@@ -368,11 +368,10 @@ INSTRUÇÕES OBRIGATÓRIAS:
 - Recomendações práticas para melhorar o score.
 - Conclusão final com parecer de contratação.
 
-4. Use linguagem de headhunter experiente.
-5. Seja detalhado, minucioso e consistente.
-6. Não invente experiências não suportadas pelo currículo.
-7. Pode usar parágrafos longos e bullets.
-8. Se houver incerteza, explicite a hipótese.
+4. Seja longo, detalhado e minucioso.
+5. Não invente experiências não presentes no currículo.
+6. Use linguagem de headhunter experiente.
+7. Pode usar parágrafos extensos e bullets.
 
 VAGA: {descricao_vaga}
 
@@ -393,14 +392,11 @@ CURRÍCULO OTIMIZADO:
 
     try:
         dbg("audit request start")
-        comp_auditoria = await asyncio.to_thread(
-            lambda: client.chat.completions.create(
-                model="deepseek-ai/deepseek-v4-flash",
-                messages=[{"role": "user", "content": prompt_auditoria}],
-                temperature=0.1,
-                max_tokens=2500,
-                request_timeout=180,
-            )
+        comp_auditoria = client.chat.completions.create(
+            model="deepseek-ai/deepseek-v4-flash",
+            messages=[{"role": "user", "content": prompt_auditoria}],
+            temperature=0.1,
+            max_tokens=2500,
         )
         raw_audit = comp_auditoria.choices[0].message.content if comp_auditoria and comp_auditoria.choices else ""
         dbg(f"audit raw response={raw_audit[:800]!r}")
