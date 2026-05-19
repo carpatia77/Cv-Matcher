@@ -5,6 +5,7 @@ import shutil
 import tempfile
 import uuid
 from pathlib import Path
+import time
 
 import fitz
 import numpy as np
@@ -33,6 +34,10 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 TMP_DIR.mkdir(exist_ok=True)
 RESULTS = {}
+
+
+def dbg(msg):
+    print(f"[ATS-DBG] {time.strftime('%H:%M:%S')} {msg}", flush=True)
 
 
 class ReportPDF(FPDF):
@@ -243,20 +248,26 @@ def calcular_similaridade_semantica(texto1: str, texto2: str, cliente_api: OpenA
     last_err = None
     for t in tentativas:
         try:
+            dbg(f"embedding model={t['model']}")
             resp1 = cliente_api.embeddings.create(model=t["model"], input=texto1, **t["payload"])
             resp2 = cliente_api.embeddings.create(model=t["model"], input=texto2, **t["payload"])
             v1 = resp1.data[0].embedding
             v2 = resp2.data[0].embedding
-            return round(max(0.0, min(100.0, cosine_sim(v1, v2) * 100)), 2)
+            sim = round(max(0.0, min(100.0, cosine_sim(v1, v2) * 100)), 2)
+            dbg(f"embedding ok model={t['model']} sim={sim}")
+            return sim
         except Exception as e:
             last_err = e
-            print(f"⚠️ Embedding falhou com {t['model']}: {e}")
-    print(f"⚠️ Todos os modelos de embedding falharam. Fallback 50.0%. Ultimo erro: {last_err}")
+            dbg(f"embedding fail model={t['model']} err={repr(e)}")
+    dbg(f"embedding fallback 50.0 last_err={repr(last_err)}")
     return 50.0
 
 
 def run_ats_pipeline(input_pdf: str, output_pdf: str, vaga_alvo: str, descricao_vaga: str):
+    t0 = time.time()
+    dbg(f"pipeline start vaga={vaga_alvo}")
     cv_text_raw = extract_text_from_pdf(input_pdf)
+    dbg(f"pdf extract done len={len(cv_text_raw)} elapsed={time.time()-t0:.2f}s")
     if not cv_text_raw.strip():
         raise RuntimeError("Não foi possível extrair texto do PDF enviado.")
 
@@ -274,16 +285,20 @@ CURRÍCULO ORIGINAL: {cv_text_raw}
 Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simples e sem caracteres decorativos.
 """
 
+    dbg("optimization request start")
     comp_otimizacao = client.chat.completions.create(
         model="meta/llama-3.3-70b-instruct",
         messages=[{"role": "user", "content": prompt_otimizacao}],
         temperature=0.2,
         max_tokens=3000,
     )
+    dbg(f"optimization response done elapsed={time.time()-t0:.2f}s")
     resposta_otimizacao = sanitize_text(comp_otimizacao.choices[0].message.content)
     cv_otimizado_texto = resposta_otimizacao.split(DELIMITADOR_CV, 1)[1].strip() if DELIMITADOR_CV in resposta_otimizacao else resposta_otimizacao.strip()
 
+    dbg(f"similarity start cv_len={len(cv_otimizado_texto)}")
     s_nlp = calcular_similaridade_semantica(cv_otimizado_texto, descricao_vaga, client)
+    dbg(f"similarity done s_nlp={s_nlp} elapsed={time.time()-t0:.2f}s")
 
     prompt_auditoria = f"""
 Você é um Headhunter Executivo. Analise a aderência do CURRÍCULO à VAGA de {vaga_alvo}. Seja altamente crítico.
@@ -299,12 +314,14 @@ Retorne EXATAMENTE estas tags:
 Após as tags, escreva o título "**ANÁLISE DE RISCO DO RECRUTADOR**" e justifique os motivos das notas.
 """
 
+    dbg("audit request start")
     comp_auditoria = client.chat.completions.create(
         model="deepseek-ai/deepseek-v4-flash",
         messages=[{"role": "user", "content": prompt_auditoria}],
         temperature=0.1,
         max_tokens=1500,
     )
+    dbg(f"audit response done elapsed={time.time()-t0:.2f}s")
     resposta_auditoria = sanitize_text(comp_auditoria.choices[0].message.content)
 
     s_tech = extract_note("SCORE_TECNICO", resposta_auditoria)
@@ -313,7 +330,9 @@ Após as tags, escreva o título "**ANÁLISE DE RISCO DO RECRUTADOR**" e justifi
     score_final = round((s_tech * 0.45) + (s_senior * 0.35) + (s_nlp * 0.20) - penalidade, 1)
     score_final = max(0.0, min(100.0, score_final))
 
+    dbg("pdf generation start")
     generate_pdf(vaga_alvo, score_final, s_tech, s_senior, s_nlp, penalidade, resposta_auditoria, output_pdf)
+    dbg(f"pdf generation done elapsed={time.time()-t0:.2f}s out={output_pdf}")
 
     return {
         "vaga_alvo": vaga_alvo,
@@ -343,11 +362,8 @@ async def list_jobs():
 
 
 @app.post("/api/analyze")
-async def analyze(
-    job_id: str = Form(...),
-    descricao_customizada: str = Form(""),
-    cv_file: UploadFile = File(...),
-):
+async def analyze(job_id: str = Form(...), descricao_customizada: str = Form(""), cv_file: UploadFile = File(...)):
+    dbg(f"analyze start filename={cv_file.filename} job_id={job_id}")
     if not NVIDIA_API_KEY:
         raise HTTPException(status_code=500, detail="NVIDIA_API_KEY não configurada no servidor.")
 
@@ -363,26 +379,22 @@ async def analyze(
     vaga_alvo = selected_job["titulo"] if selected_job else "Vaga Customizada"
     run_id = uuid.uuid4().hex
     output_pdf = TMP_DIR / f"{run_id}.pdf"
+    dbg(f"analyze prepared run_id={run_id} output_pdf={output_pdf}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         input_pdf = os.path.join(tmpdir, cv_file.filename)
         with open(input_pdf, "wb") as f:
             shutil.copyfileobj(cv_file.file, f)
+        dbg(f"upload saved input_pdf={input_pdf}")
 
         try:
-            result = run_ats_pipeline(
-                input_pdf=input_pdf,
-                output_pdf=str(output_pdf),
-                vaga_alvo=vaga_alvo,
-                descricao_vaga=descricao_final,
-            )
+            result = run_ats_pipeline(input_pdf=input_pdf, output_pdf=str(output_pdf), vaga_alvo=vaga_alvo, descricao_vaga=descricao_final)
         except Exception as e:
+            dbg(f"analyze error err={repr(e)}")
             raise HTTPException(status_code=500, detail=f"Erro ao processar análise: {str(e)}")
 
-    RESULTS[run_id] = {
-        "pdf_path": str(output_pdf),
-        "result": result,
-    }
+    RESULTS[run_id] = {"pdf_path": str(output_pdf), "result": result}
+    dbg(f"analyze done run_id={run_id}")
 
     return JSONResponse(content={
         "status": "ok",
@@ -396,6 +408,7 @@ async def analyze(
         "penalidade": result["penalidade"],
         "headline": "Análise concluída com sucesso.",
         "detail": "O PDF foi gerado e está pronto para download.",
+        "elapsed_seconds": round(time.time() - t0, 2),
     })
 
 
