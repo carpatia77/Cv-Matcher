@@ -7,227 +7,119 @@
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">A</div>
+  <main class="page">
+    <section class="hero">
+      <div class="eyebrow">ATS Predictor</div>
+      <h1>Diagnóstico preditivo de aderência profissional</h1>
+      <p class="lead">
+        Faça upload do currículo, selecione a vaga e receba uma análise executiva com score, métricas e relatório em PDF.
+      </p>
+    </section>
+
+    <section class="card form-card">
+      <div class="card-head">
         <div>
-          <strong>ATS Predictor</strong>
-          <span>Workforce Intelligence</span>
+          <span class="section-tag">Análise</span>
+          <h2>Enviar currículo</h2>
         </div>
+        <span class="status-pill" id="statusPill">Aguardando</span>
       </div>
 
-      <nav class="side-nav">
-        <a class="active" href="#">Diagnóstico</a>
-        <a href="#">Vagas</a>
-        <a href="#">Relatórios</a>
-        <a href="#">Configurações</a>
-      </nav>
-
-      <div class="side-card">
-        <p class="side-label">Modo atual</p>
-        <h3>MVP Render</h3>
-        <p>Upload de currículo, análise ATS e relatório executivo em PDF.</p>
-      </div>
-    </aside>
-
-    <main class="main-content">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">Painel corporativo</p>
-          <h1>Diagnóstico preditivo de aderência profissional</h1>
-          <p class="subtext">
-            Analise currículos em relação a vagas-alvo e gere um relatório executivo com score, risco e aderência semântica.
-          </p>
-        </div>
-
-        <div class="topbar-meta">
-          <div class="meta-card">
-            <span>Status</span>
-            <strong>Operacional</strong>
+      <form id="atsForm" class="form">
+        <div class="grid-2">
+          <div class="field">
+            <label for="job_id">Vaga-alvo</label>
+            <select id="job_id" name="job_id"></select>
           </div>
-          <div class="meta-card">
-            <span>Ambiente</span>
-            <strong>Render</strong>
+
+          <div class="field">
+            <label for="cv_file">Currículo em PDF</label>
+            <input id="cv_file" name="cv_file" type="file" accept=".pdf" required />
           </div>
         </div>
-      </header>
 
-      <section class="hero-grid">
-        <article class="hero-card hero-primary">
-          <div class="hero-copy">
-            <p class="eyebrow light">Análise inteligente</p>
-            <h2>Transforme triagem de currículos em um fluxo mais claro, rápido e profissional.</h2>
-            <p>
-              Faça upload do currículo, selecione a vaga e gere um parecer técnico em PDF com leitura executiva.
-            </p>
-          </div>
-          <div class="hero-stats">
-            <div class="stat">
-              <span>Pipeline</span>
-              <strong>ATS + NLP</strong>
-            </div>
-            <div class="stat">
-              <span>Saída</span>
-              <strong>PDF executivo</strong>
-            </div>
-            <div class="stat">
-              <span>Fluxo</span>
-              <strong>Síncrono MVP</strong>
-            </div>
-          </div>
-        </article>
+        <div class="field">
+          <label for="descricao_customizada">Descrição da vaga</label>
+          <textarea
+            id="descricao_customizada"
+            name="descricao_customizada"
+            rows="8"
+            placeholder="A descrição da vaga será preenchida automaticamente, mas pode ser editada."
+          ></textarea>
+        </div>
 
-        <article class="hero-card hero-soft">
-          <p class="eyebrow">Resumo operacional</p>
-          <ul class="summary-list">
-            <li>Upload seguro de currículo em PDF</li>
-            <li>Seleção de vagas com descrição editável</li>
-            <li>Análise semântica e score composto</li>
-            <li>Download imediato do relatório</li>
-          </ul>
-        </article>
-      </section>
+        <div class="actions">
+          <button id="submitBtn" type="submit">
+            <span class="btn-text">Gerar diagnóstico</span>
+            <span class="btn-spinner" aria-hidden="true"></span>
+          </button>
+        </div>
+      </form>
+    </section>
 
-      <section class="content-grid">
-        <section class="panel form-panel">
-          <div class="panel-header">
-            <div>
-              <p class="eyebrow">Entrada de dados</p>
-              <h3>Parâmetros da análise</h3>
-            </div>
-            <span class="panel-tag">Módulo principal</span>
-          </div>
-
-          <form id="atsForm" class="ats-form">
-            <div class="field">
-              <label for="job_id">Vaga-alvo</label>
-              <select id="job_id" name="job_id"></select>
-            </div>
-
-            <div class="field">
-              <label for="descricao_customizada">Descrição da vaga</label>
-              <textarea
-                id="descricao_customizada"
-                name="descricao_customizada"
-                rows="10"
-                placeholder="A descrição da vaga será preenchida automaticamente, mas pode ser editada."
-              ></textarea>
-            </div>
-
-            <div class="upload-box">
-              <div class="upload-copy">
-                <p class="upload-title">Currículo em PDF</p>
-                <p class="upload-subtitle">
-                  Envie o currículo atual para gerar o diagnóstico ATS e o relatório executivo.
-                </p>
-              </div>
-              <input id="cv_file" name="cv_file" type="file" accept=".pdf" required />
-            </div>
-
-            <div class="actions">
-              <button id="submitBtn" type="submit">
-                <span class="btn-text">Gerar diagnóstico</span>
-                <span class="btn-spinner" aria-hidden="true"></span>
-              </button>
-            </div>
-          </form>
-        </section>
-
-        <aside class="panel info-panel">
-          <div class="panel-header">
-            <div>
-              <p class="eyebrow">Visão lateral</p>
-              <h3>Diretrizes do relatório</h3>
-            </div>
-          </div>
-
-          <div class="info-stack">
-            <div class="info-card">
-              <span class="info-kicker">Score técnico</span>
-              <h4>Aderência funcional</h4>
-              <p>Mede o fit entre as competências do currículo e as exigências centrais da vaga.</p>
-            </div>
-
-            <div class="info-card">
-              <span class="info-kicker">Senioridade</span>
-              <h4>Maturidade profissional</h4>
-              <p>Avalia nível de consistência, profundidade e alinhamento com o escopo esperado.</p>
-            </div>
-
-            <div class="info-card">
-              <span class="info-kicker">Fricção</span>
-              <h4>Barreiras de mercado</h4>
-              <p>Considera gaps, ruído de posicionamento e fatores que podem reduzir conversão.</p>
-            </div>
-          </div>
-        </aside>
-      </section>
-
-      <section class="result-grid">
-        <article class="panel result-card">
-          <div class="panel-header">
-            <div>
-              <p class="eyebrow">Resultado</p>
-              <h3>Resumo da análise</h3>
-            </div>
-            <span id="resultPill" class="panel-tag neutral">Aguardando</span>
-          </div>
-
-          <div class="score-wrap">
-            <div class="score-ring">
-              <div id="scoreNumber" class="score-number">--</div>
-              <div class="score-label">Score final</div>
-            </div>
-
-            <div class="score-copy">
-              <p id="resultHeadline" class="result-headline">
-                Envie o currículo para gerar a análise.
-              </p>
-              <p id="resultDetail" class="result-detail">
-                O relatório final em PDF será disponibilizado automaticamente após o processamento.
-              </p>
-
-              <div class="metric-row">
-                <div class="metric-box">
-                  <span>Técnico</span>
-                  <strong id="metricTech">--</strong>
-                </div>
-                <div class="metric-box">
-                  <span>Senioridade</span>
-                  <strong id="metricSenior">--</strong>
-                </div>
-                <div class="metric-box">
-                  <span>NLP</span>
-                  <strong id="metricNlp">--</strong>
-                </div>
-                <div class="metric-box">
-                  <span>Fricção</span>
-                  <strong id="metricFriction">--</strong>
-                </div>
-              </div>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <section class="status-panel">
-        <div class="status-header">
+    <section class="results">
+      <article class="card score-card">
+        <div class="card-head">
           <div>
-            <p class="eyebrow">Execução</p>
-            <h3>Status da operação</h3>
+            <span class="section-tag">Resultado</span>
+            <h2>Score final</h2>
+          </div>
+          <span id="resultPill" class="status-pill neutral">Aguardando</span>
+        </div>
+
+        <div class="score-layout">
+          <div class="score-ring">
+            <div id="scoreNumber" class="score-number">--</div>
+            <div class="score-label">Score</div>
+          </div>
+
+          <div class="result-copy">
+            <p id="resultHeadline" class="result-headline">
+              Envie o currículo para iniciar a análise.
+            </p>
+            <p id="resultDetail" class="result-detail">
+              O relatório em PDF será baixado automaticamente ao final do processamento.
+            </p>
+
+            <div class="metrics">
+              <div class="metric">
+                <span>Técnico</span>
+                <strong id="metricTech">--</strong>
+              </div>
+              <div class="metric">
+                <span>Senioridade</span>
+                <strong id="metricSenior">--</strong>
+              </div>
+              <div class="metric">
+                <span>NLP</span>
+                <strong id="metricNlp">--</strong>
+              </div>
+              <div class="metric">
+                <span>Fricção</span>
+                <strong id="metricFriction">--</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card status-card">
+        <div class="card-head">
+          <div>
+            <span class="section-tag">Status</span>
+            <h2>Operação</h2>
           </div>
         </div>
         <div id="status" class="status idle">Aguardando envio do currículo para iniciar a análise.</div>
-      </section>
-    </main>
-  </div>
+      </article>
+    </section>
+  </main>
 
   <div id="overlay" class="overlay hidden">
     <div class="overlay-card">
       <div class="spinner-large"></div>
       <h3>Processando análise</h3>
-      <p>Estamos lendo seu currículo, rodando a avaliação semântica e gerando o relatório executivo.</p>
+      <p>Estamos lendo o currículo e montando o relatório executivo.</p>
     </div>
   </div>
 
@@ -263,17 +155,23 @@
       status.textContent = message;
     }
 
-    function setResult(score, headline, detail, pillType = 'neutral') {
-      const scoreNumber = document.getElementById('scoreNumber');
-      const resultHeadline = document.getElementById('resultHeadline');
-      const resultDetail = document.getElementById('resultDetail');
+    function setPills(text, type) {
+      const statusPill = document.getElementById('statusPill');
       const resultPill = document.getElementById('resultPill');
+      statusPill.className = `status-pill ${type}`;
+      resultPill.className = `status-pill ${type}`;
+      statusPill.textContent = text;
+      resultPill.textContent = text;
+    }
 
-      scoreNumber.textContent = score !== null ? score : '--';
-      resultHeadline.textContent = headline || 'Envie o currículo para gerar a análise.';
-      resultDetail.textContent = detail || 'O relatório final em PDF será disponibilizado automaticamente após o processamento.';
-      resultPill.className = `panel-tag ${pillType}`;
-      resultPill.textContent = pillType === 'success' ? 'Concluído' : pillType === 'warning' ? 'Atenção' : pillType === 'error' ? 'Falha' : 'Aguardando';
+    function setResult(score, headline, detail, pillType = 'neutral') {
+      document.getElementById('scoreNumber').textContent = score !== null ? score : '--';
+      document.getElementById('resultHeadline').textContent = headline || 'Envie o currículo para iniciar a análise.';
+      document.getElementById('resultDetail').textContent = detail || 'O relatório em PDF será baixado automaticamente ao final do processamento.';
+      setPills(
+        pillType === 'success' ? 'Concluído' : pillType === 'warning' ? 'Atenção' : pillType === 'error' ? 'Falha' : 'Aguardando',
+        pillType
+      );
     }
 
     function setMetrics({ tech = '--', senior = '--', nlp = '--', friction = '--' } = {}) {
@@ -289,14 +187,14 @@
 
     document.getElementById('atsForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const formEl = e.target;
+
       const submitBtn = document.getElementById('submitBtn');
-      const formData = new FormData(formEl);
+      const formData = new FormData(e.target);
 
       submitBtn.disabled = true;
       submitBtn.classList.add('loading');
       showOverlay(true);
-      setStatus('Processando análise... isso pode levar de 20 a 60 segundos.', 'loading');
+      setStatus('Processando análise...', 'loading');
       setResult(null, 'Processando a solicitação.', 'O sistema está executando a análise neural.', 'neutral');
 
       try {
@@ -332,9 +230,7 @@
         });
 
         const pdfRes = await fetch(data.download_url);
-        if (!pdfRes.ok) {
-          throw new Error('Análise concluída, mas não foi possível baixar o PDF.');
-        }
+        if (!pdfRes.ok) throw new Error('Análise concluída, mas não foi possível baixar o PDF.');
 
         const blob = await pdfRes.blob();
         const url = window.URL.createObjectURL(blob);
@@ -356,7 +252,6 @@
     });
 
     loadJobs();
-    setResult(null, 'Envie o currículo para gerar a análise.', 'O relatório final em PDF será disponibilizado automaticamente após o processamento.', 'neutral');
   </script>
 </body>
 </html>
