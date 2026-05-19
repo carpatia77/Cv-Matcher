@@ -29,11 +29,11 @@ NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "")
 NVIDIA_BASE_URL = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
 APP_ENV = os.getenv("APP_ENV", "development")
 
-TIMEOUT_EXTRACTION = float(os.getenv("TIMEOUT_EXTRACTION", "15"))
-TIMEOUT_OPTIMIZATION = float(os.getenv("TIMEOUT_OPTIMIZATION", "40"))
-TIMEOUT_EMBEDDING = float(os.getenv("TIMEOUT_EMBEDDING", "25"))
-TIMEOUT_AUDIT = float(os.getenv("TIMEOUT_AUDIT", "40"))
-TIMEOUT_PDF = float(os.getenv("TIMEOUT_PDF", "20"))
+TIMEOUT_EXTRACTION = float(os.getenv("TIMEOUT_EXTRACTION", "20"))
+TIMEOUT_OPTIMIZATION = float(os.getenv("TIMEOUT_OPTIMIZATION", "90"))
+TIMEOUT_EMBEDDING = float(os.getenv("TIMEOUT_EMBEDDING", "45"))
+TIMEOUT_AUDIT = float(os.getenv("TIMEOUT_AUDIT", "180"))
+TIMEOUT_PDF = float(os.getenv("TIMEOUT_PDF", "30"))
 
 app = FastAPI(title="ATS Predictor MVP")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -140,7 +140,9 @@ def configure_font(pdf: FPDF):
 
 def pdf_text(pdf: FPDF, txt: str) -> str:
     txt = sanitize_text(txt)
-    return txt if getattr(pdf, "main_font", "Helvetica") == "Uni" else txt.encode("latin-1", "replace").decode("latin-1")
+    if getattr(pdf, "main_font", "Helvetica") == "Uni":
+        return txt
+    return txt.encode("latin-1", "replace").decode("latin-1")
 
 
 def safe_cell(pdf: FPDF, h: float, txt: str, **kwargs):
@@ -234,7 +236,7 @@ def get_client() -> OpenAI:
     return OpenAI(
         base_url=NVIDIA_BASE_URL,
         api_key=NVIDIA_API_KEY,
-        timeout=30.0,
+        timeout=180.0,
         max_retries=0,
     )
 
@@ -304,7 +306,7 @@ CURRÍCULO ORIGINAL: {cv_text_raw}
 
 {DELIMITADOR_CV}
 Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simples e sem caracteres decorativos.
-"""
+""".strip()
 
     fallback_cv = sanitize_text(cv_text_raw)
     comp_otimizacao, opt_err = await timed_call(
@@ -314,7 +316,8 @@ Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simple
                 model="meta/llama-3.3-70b-instruct",
                 messages=[{"role": "user", "content": prompt_otimizacao}],
                 temperature=0.2,
-                max_tokens=2500,
+                max_tokens=3000,
+                request_timeout=120,
             )
         ),
         TIMEOUT_OPTIMIZATION,
@@ -342,20 +345,46 @@ Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simple
         s_nlp = 50.0
 
     prompt_auditoria = f"""
-Você é um Headhunter Executivo.
-Analise a aderência do currículo à vaga abaixo e retorne APENAS:
+Você é um Headhunter Executivo sênior e extremamente crítico.
+Sua missão é produzir uma auditoria minuciosa, detalhada, profunda e útil para decisão de recrutamento.
+Não economize na análise, mas mantenha clareza, objetividade e estrutura.
 
+INSTRUÇÕES OBRIGATÓRIAS:
+1. Retorne primeiro as três tags exatamente neste formato:
 [SCORE_TECNICO]XX[/SCORE_TECNICO]
 [SCORE_SENIORIDADE]XX[/SCORE_SENIORIDADE]
 [PENALIDADE_FRICCAO]XX[/PENALIDADE_FRICCAO]
 
-Depois, escreva um resumo curto com 3 bullets sobre os principais riscos.
+2. Depois das tags, escreva obrigatoriamente o título:
+**ANÁLISE DE RISCO DO RECRUTADOR**
+
+3. Em seguida, produza uma análise extensa com as seguintes seções:
+- Resumo executivo da aderência.
+- Leitura de hard skills e gaps técnicos.
+- Leitura de senioridade, autonomia e maturidade.
+- Riscos de recrutamento e fricções de mercado.
+- Forças competitivas do candidato.
+- Fragilidades que podem travar shortlist.
+- Recomendações práticas para melhorar o score.
+- Conclusão final com parecer de contratação.
+
+4. Use linguagem de headhunter experiente.
+5. Seja detalhado, minucioso e consistente.
+6. Não invente experiências não suportadas pelo currículo.
+7. Pode usar parágrafos longos e bullets.
+8. Se houver incerteza, explicite a hipótese.
 
 VAGA: {descricao_vaga}
-CURRÍCULO: {cv_otimizado_texto[:1800]}
+
+CURRÍCULO OTIMIZADO:
+{cv_otimizado_texto[:2500]}
 """.strip()
 
     fallback_audit = """
+[SCORE_TECNICO]45[/SCORE_TECNICO]
+[SCORE_SENIORIDADE]45[/SCORE_SENIORIDADE]
+[PENALIDADE_FRICCAO]10[/PENALIDADE_FRICCAO]
+
 **ANÁLISE DE RISCO DO RECRUTADOR**
 - Auditoria indisponível no momento.
 - O sistema aplicou fallback conservador.
@@ -364,21 +393,20 @@ CURRÍCULO: {cv_otimizado_texto[:1800]}
 
     try:
         dbg("audit request start")
-        comp_auditoria = await asyncio.wait_for(
-            asyncio.to_thread(
-                lambda: client.chat.completions.create(
-                    model="deepseek-ai/deepseek-v4-flash",
-                    messages=[{"role": "user", "content": prompt_auditoria}],
-                    temperature=0.1,
-                    max_tokens=700,
-                    timeout=20.0,
-                )
-            ),
-            timeout=TIMEOUT_AUDIT,
+        comp_auditoria = await asyncio.to_thread(
+            lambda: client.chat.completions.create(
+                model="deepseek-ai/deepseek-v4-flash",
+                messages=[{"role": "user", "content": prompt_auditoria}],
+                temperature=0.1,
+                max_tokens=2500,
+                request_timeout=180,
+            )
         )
+        raw_audit = comp_auditoria.choices[0].message.content if comp_auditoria and comp_auditoria.choices else ""
+        dbg(f"audit raw response={raw_audit[:800]!r}")
+        resposta_auditoria = sanitize_text(raw_audit) if raw_audit.strip() else fallback_audit
+        audit_err = None if raw_audit.strip() else RuntimeError("Resposta vazia da auditoria")
         dbg("audit response ok")
-        resposta_auditoria = sanitize_text(comp_auditoria.choices[0].message.content)
-        audit_err = None
     except Exception as e:
         dbg(f"audit fallback err={repr(e)}")
         resposta_auditoria = fallback_audit
