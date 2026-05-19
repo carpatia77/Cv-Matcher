@@ -30,15 +30,18 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
-@app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "app_env": APP_ENV})
-
 class ReportPDF(FPDF):
     def header(self):
         self.set_text_color(0, 51, 102)
         self.set_font(self.main_font, "B", 14)
-        self.cell(0, 10, pdf_text(self, "RELATORIO PREDITIVO DE EMPREGABILIDADE (ATS)"), align="C", new_x="LMARGIN", new_y="NEXT")
+        self.cell(
+            0,
+            10,
+            pdf_text(self, "RELATORIO PREDITIVO DE EMPREGABILIDADE (ATS)"),
+            align="C",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
         self.set_line_width(0.5)
         self.set_draw_color(0, 51, 102)
         self.line(15, 22, 195, 22)
@@ -48,21 +51,39 @@ class ReportPDF(FPDF):
         self.set_y(-15)
         self.set_text_color(128, 128, 128)
         self.set_font(self.main_font, "", 8)
-        self.cell(0, 10, pdf_text(self, f"Pagina {self.page_no()} | Analise Neural"), align="C")
+        self.cell(
+            0,
+            10,
+            pdf_text(self, f"Pagina {self.page_no()} | Analise Neural"),
+            align="C",
+        )
 
 
 def sanitize_text(text: str) -> str:
     if text is None:
         return ""
+
     text = str(text)
     subs = {
-        "\u2013": "-", "\u2014": "-", "\u201c": '"', "\u201d": '"',
-        "\u2018": "'", "\u2019": "'", "\u2022": "-", "\u2023": "-",
-        "\u2043": "-", "\u2219": "-", "\u00b7": "-", "\u2026": "...",
-        "\u00a0": " ", "\t": "    ",
+        "\u2013": "-",
+        "\u2014": "-",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u2018": "'",
+        "\u2019": "'",
+        "\u2022": "-",
+        "\u2023": "-",
+        "\u2043": "-",
+        "\u2219": "-",
+        "\u00b7": "-",
+        "\u2026": "...",
+        "\u00a0": " ",
+        "\t": "    ",
     }
+
     for k, v in subs.items():
         text = text.replace(k, v)
+
     text = re.sub(r"[^\S\r\n]+", " ", text)
     text = "\n".join(line.rstrip() for line in text.splitlines())
 
@@ -72,7 +93,7 @@ def sanitize_text(text: str) -> str:
             if len(word) <= max_chars:
                 out.append(word)
             else:
-                out.append("-\n".join(word[i:i+max_chars] for i in range(0, len(word), max_chars)))
+                out.append("-\n".join(word[i:i + max_chars] for i in range(0, len(word), max_chars)))
         return " ".join(out)
 
     return "\n".join(wrap_long_word(line) for line in text.split("\n")).strip()
@@ -112,7 +133,7 @@ def configure_font(pdf: FPDF):
 
 def pdf_text(pdf: FPDF, txt: str) -> str:
     txt = sanitize_text(txt)
-    return txt if pdf.main_font == "Uni" else txt.encode("latin-1", "replace").decode("latin-1")
+    return txt if getattr(pdf, "main_font", "Helvetica") == "Uni" else txt.encode("latin-1", "replace").decode("latin-1")
 
 
 def safe_cell(pdf: FPDF, h: float, txt: str, **kwargs):
@@ -293,7 +314,11 @@ Após as tags, escreva o título "**ANÁLISE DE RISCO DO RECRUTADOR**" e justifi
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "app_env": APP_ENV})
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"app_env": APP_ENV},
+    )
 
 
 @app.get("/api/health")
