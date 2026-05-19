@@ -51,7 +51,14 @@ class ReportPDF(FPDF):
     def header(self):
         self.set_text_color(0, 51, 102)
         self.set_font(self.main_font, "B", 14)
-        self.cell(0, 10, pdf_text(self, "RELATORIO PREDITIVO DE EMPREGABILIDADE (ATS)"), align="C", new_x="LMARGIN", new_y="NEXT")
+        self.cell(
+            0,
+            10,
+            pdf_text(self, "RELATORIO PREDITIVO DE EMPREGABILIDADE (ATS)"),
+            align="C",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
         self.set_line_width(0.5)
         self.set_draw_color(0, 51, 102)
         self.line(15, 22, 195, 22)
@@ -61,12 +68,18 @@ class ReportPDF(FPDF):
         self.set_y(-15)
         self.set_text_color(128, 128, 128)
         self.set_font(self.main_font, "", 8)
-        self.cell(0, 10, pdf_text(self, f"Pagina {self.page_no()} | Analise Neural"), align="C")
+        self.cell(
+            0,
+            10,
+            pdf_text(self, f"Pagina {self.page_no()} | Analise Neural"),
+            align="C",
+        )
 
 
 def sanitize_text(text: str) -> str:
     if text is None:
         return ""
+
     text = str(text)
     subs = {
         "\u2013": "-",
@@ -84,8 +97,10 @@ def sanitize_text(text: str) -> str:
         "\u00a0": " ",
         "\t": "    ",
     }
+
     for k, v in subs.items():
         text = text.replace(k, v)
+
     text = re.sub(r"[^\S\r\n]+", " ", text)
     text = "\n".join(line.rstrip() for line in text.splitlines())
     return text.strip()
@@ -309,7 +324,10 @@ Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simple
         dbg("optimization fallback used")
 
     try:
-        s_nlp = await asyncio.wait_for(asyncio.to_thread(calcular_similaridade_semantica, cv_otimizado_texto, descricao_vaga, client), timeout=TIMEOUT_EMBEDDING)
+        s_nlp = await asyncio.wait_for(
+            asyncio.to_thread(calcular_similaridade_semantica, cv_otimizado_texto, descricao_vaga, client),
+            timeout=TIMEOUT_EMBEDDING,
+        )
     except Exception as e:
         dbg(f"similarity fallback err={repr(e)}")
         s_nlp = 50.0
@@ -328,14 +346,18 @@ Retorne EXATAMENTE estas tags:
 Após as tags, escreva o título "**ANÁLISE DE RISCO DO RECRUTADOR**" e justifique os motivos das notas.
 """
 
-    fallback_audit = f\"\"\"\n**ANÁLISE DE RISCO DO RECRUTADOR**\n- Não foi possível completar a auditoria por timeout ou erro.\n- O sistema retornou fallback conservador para manter a operação.\n\"\"\".strip()
+    fallback_audit = """
+**ANÁLISE DE RISCO DO RECRUTADOR**
+- Não foi possível completar a auditoria por timeout ou erro.
+- O sistema retornou fallback conservador para manter a operação.
+""".strip()
 
     comp_auditoria, audit_err = await timed_call(
         "audit",
         asyncio.to_thread(
             lambda: client.chat.completions.create(
-                model=\"deepseek-ai/deepseek-v4-flash\",
-                messages=[{\"role\": \"user\", \"content\": prompt_auditoria}],
+                model="deepseek-ai/deepseek-v4-flash",
+                messages=[{"role": "user", "content": prompt_auditoria}],
                 temperature=0.1,
                 max_tokens=1200,
             )
@@ -348,11 +370,11 @@ Após as tags, escreva o título "**ANÁLISE DE RISCO DO RECRUTADOR**" e justifi
         resposta_auditoria = sanitize_text(comp_auditoria.choices[0].message.content)
     else:
         resposta_auditoria = fallback_audit
-        dbg(\"audit fallback used\")
+        dbg("audit fallback used")
 
-    s_tech = extract_note(\"SCORE_TECNICO\", resposta_auditoria, default=45 if audit_err else 50)
-    s_senior = extract_note(\"SCORE_SENIORIDADE\", resposta_auditoria, default=45 if audit_err else 50)
-    penalidade = extract_note(\"PENALIDADE_FRICCAO\", resposta_auditoria, default=10 if audit_err else 0)
+    s_tech = extract_note("SCORE_TECNICO", resposta_auditoria, default=45 if audit_err else 50)
+    s_senior = extract_note("SCORE_SENIORIDADE", resposta_auditoria, default=45 if audit_err else 50)
+    penalidade = extract_note("PENALIDADE_FRICCAO", resposta_auditoria, default=10 if audit_err else 0)
 
     score_final = round((s_tech * 0.45) + (s_senior * 0.35) + (s_nlp * 0.20) - penalidade, 1)
     score_final = max(0.0, min(100.0, score_final))
@@ -448,4 +470,11 @@ async def analyze(job_id: str = Form(...), descricao_customizada: str = Form("")
 
 
 @app.get("/api/result/{run_id}")
-async def download_result(run_id
+async def download_result(run_id: str):
+    item = RESULTS.get(run_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Resultado não encontrado ou expirado.")
+    pdf_path = item["pdf_path"]
+    if not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="Arquivo PDF não encontrado.")
+    return FileResponse(path=pdf_path, media_type="application/pdf", filename="diagnostico_ats.pdf")
