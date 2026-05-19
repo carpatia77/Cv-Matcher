@@ -1,0 +1,38 @@
+[
+  {
+    "id": "analista-comercial",
+    "titulo": "Analista Comercial",
+    "categoria": "Comercial",
+    "descricao": "Closer Comercial (High Ticket) presencial em Porto Alegre. Responsavel por conduzir reunioes comerciais estrategicas, negociar e fechar vendas high ticket, gerenciar funil e CRM, manter relacionamento consultivo com clientes e atuar em parceria com pre-vendas."
+  },
+  {
+    "id": "closer-high-ticket",
+    "titulo": "Closer Comercial High Ticket",
+    "categoria": "Comercial",
+    "descricao": "Profissional focado em fechamento de vendas consultivas de alto valor, conducao de calls estrategicas, tratamento de objecoes, follow-up estruturado, gestao de pipeline, atualizacao de CRM e foco em conversao."
+  },
+  {
+    "id": "executivo-comercial",
+    "titulo": "Executivo Comercial",
+    "categoria": "Comercial",
+    "descricao": "Responsavel por prospeccao, conducao de reunioes, negociacao de propostas, relacionamento com carteira de clientes, gestao de indicadores comerciais e uso disciplinado de CRM."
+  },
+  {
+    "id": "inside-sales",
+    "titulo": "Inside Sales",
+    "categoria": "Comercial",
+    "descricao": "Atuacao em vendas internas com qualificacao de oportunidades, demonstracao de solucoes, follow-up comercial, fechamento de contratos e atualizacao de CRM."
+  },
+  {
+    "id": "arquiteto-ia",
+    "titulo": "Arquiteto de IA",
+    "categoria": "Tecnologia",
+    "descricao": "Desenho de arquitetura de sistemas de inteligencia artificial, LLMs, multiagentes, pipelines de inferencia, integracoes por API, observabilidade, seguranca, custo e escalabilidade em cloud."
+  },
+  {
+    "id": "cientista-dados",
+    "titulo": "Cientista de Dados",
+    "categoria": "Dados",
+    "descricao": "Analise de dados, modelagem estatistica, construcao de modelos preditivos, feature engineering, validacao de experimentos, dashboards e apresentacao de insights para negocio."
+  }
+]

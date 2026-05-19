@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ATS Predictor MVP</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="container">
+    <section class="card hero">
+      <h1>ATS Predictor</h1>
+      <p>Envie seu currículo em PDF, escolha uma vaga e gere um diagnóstico preditivo em PDF.</p>
+      <div class="badge-row">
+        <span class="badge">FastAPI</span>
+        <span class="badge">Render-ready</span>
+        <span class="badge">NVIDIA API</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <form id="atsForm">
+        <div class="field">
+          <label for="job_id">Vaga</label>
+          <select id="job_id" name="job_id"></select>
+        </div>
+
+        <div class="field">
+          <label for="descricao_customizada">Descrição da vaga</label>
+          <textarea id="descricao_customizada" name="descricao_customizada" rows="9" placeholder="Você pode editar a descrição carregada automaticamente."></textarea>
+        </div>
+
+        <div class="field">
+          <label for="cv_file">Currículo em PDF</label>
+          <input id="cv_file" name="cv_file" type="file" accept=".pdf" required />
+        </div>
+
+        <button id="submitBtn" type="submit">Gerar diagnóstico</button>
+      </form>
+
+      <div id="status" class="status idle">Aguardando envio.</div>
+    </section>
+  </main>
+
+  <script>
+    let jobsCache = [];
+
+    async function loadJobs() {
+      const res = await fetch('/api/jobs');
+      jobsCache = await res.json();
+      const select = document.getElementById('job_id');
+      select.innerHTML = '';
+
+      jobsCache.forEach(job => {
+        const option = document.createElement('option');
+        option.value = job.id;
+        option.textContent = `${job.titulo} (${job.categoria})`;
+        select.appendChild(option);
+      });
+
+      if (jobsCache.length) {
+        document.getElementById('descricao_customizada').value = jobsCache[0].descricao;
+      }
+
+      select.addEventListener('change', () => {
+        const selected = jobsCache.find(j => j.id === select.value);
+        document.getElementById('descricao_customizada').value = selected?.descricao || '';
+      });
+    }
+
+    function setStatus(message, type = 'idle') {
+      const status = document.getElementById('status');
+      status.className = `status ${type}`;
+      status.textContent = message;
+    }
+
+    document.getElementById('atsForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formEl = e.target;
+      const submitBtn = document.getElementById('submitBtn');
+      const formData = new FormData(formEl);
+
+      submitBtn.disabled = true;
+      setStatus('Processando análise... isso pode levar de 20 a 60 segundos.', 'loading');
+
+      try {
+        const res = await fetch('/api/analyze', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!res.ok) {
+          let detail = 'Erro ao processar análise.';
+          try {
+            const err = await res.json();
+            detail = err.detail || detail;
+          } catch (_) {}
+          throw new Error(detail);
+        }
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'diagnostico_ats.pdf';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        setStatus('PDF gerado com sucesso.', 'success');
+      } catch (err) {
+        setStatus(err.message || 'Falha inesperada no processamento.', 'error');
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+
+    loadJobs();
+  </script>
+</body>
+</html>
