@@ -3,128 +3,248 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ATS Predictor MVP</title>
+  <title>ATS Predictor Dashboard</title>
   <link rel="stylesheet" href="/static/style.css" />
+  <!-- Import Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
   <main class="page">
+    <!-- Header / Hero Section -->
     <section class="hero">
-      <div class="eyebrow">ATS Predictor</div>
+      <div class="eyebrow">
+        <i data-lucide="sparkles" style="width: 14px; height: 14px;"></i>
+        ATS Neural Matcher
+      </div>
       <h1>Diagnóstico preditivo de aderência profissional</h1>
       <p class="lead">
-        Faça upload do currículo, selecione a vaga e receba uma análise executiva com score, métricas e relatório em PDF.
+        Faça upload do currículo, selecione a vaga e receba uma análise executiva detalhada com score, métricas de fit e relatório consolidado.
       </p>
     </section>
 
+    <!-- Upload Form Card -->
     <section class="card form-card">
       <div class="card-head">
-        <div>
-          <span class="section-tag">Análise</span>
-          <h2>Enviar currículo</h2>
+        <div class="card-title-group">
+          <span class="section-tag"><i data-lucide="binary" style="width: 12px; height: 12px;"></i> Processador</span>
+          <h2>Análise de Candidato</h2>
         </div>
-        <span class="status-pill" id="statusPill">Aguardando</span>
+        <span class="status-pill" id="statusPill">
+          <i data-lucide="clock" style="width: 12px; height: 12px;"></i>
+          <span id="statusPillText">Aguardando</span>
+        </span>
       </div>
 
       <form id="atsForm" class="form">
         <div class="grid-2">
           <div class="field">
-            <label for="job_id">Vaga-alvo</label>
+            <label for="job_id">
+              <i data-lucide="briefcase" style="width: 16px; height: 16px;"></i>
+              Vaga-alvo
+            </label>
             <select id="job_id" name="job_id"></select>
           </div>
 
           <div class="field">
-            <label for="cv_file">Currículo em PDF</label>
-            <input id="cv_file" name="cv_file" type="file" accept=".pdf" required />
+            <label>
+              <i data-lucide="file-up" style="width: 16px; height: 16px;"></i>
+              Currículo em PDF
+            </label>
+            <div class="dropzone" id="dropzone">
+              <i data-lucide="upload-cloud" class="dropzone-icon" style="width: 28px; height: 28px;"></i>
+              <span class="dropzone-text">Arraste seu PDF aqui ou <strong>procure no computador</strong></span>
+              <input id="cv_file" name="cv_file" type="file" accept=".pdf" required />
+              <div id="fileInfo" class="file-info">
+                <i data-lucide="file-check-2" style="width: 14px; height: 14px;"></i>
+                <span id="fileName">Nenhum arquivo</span>
+              </div>
+            </div>
           </div>
         </div>
 
         <div class="field">
-          <label for="descricao_customizada">Descrição da vaga</label>
+          <label for="descricao_customizada">
+            <i data-lucide="text-quote" style="width: 16px; height: 16px;"></i>
+            Descrição da vaga
+          </label>
           <textarea
             id="descricao_customizada"
             name="descricao_customizada"
-            rows="8"
-            placeholder="A descrição da vaga será preenchida automaticamente, mas pode ser editada."
+            placeholder="A descrição da vaga será preenchida automaticamente com base na vaga selecionada, mas você pode editá-la conforme achar necessário."
           ></textarea>
         </div>
 
         <div class="actions">
           <button id="submitBtn" type="submit">
-            <span class="btn-text">Gerar diagnóstico</span>
+            <span class="btn-text">Iniciar Diagnóstico</span>
             <span class="btn-spinner" aria-hidden="true"></span>
+            <i data-lucide="arrow-right" class="btn-icon" style="width: 18px; height: 18px;"></i>
           </button>
         </div>
       </form>
     </section>
 
+    <!-- Results Section -->
     <section class="results">
       <article class="card score-card">
         <div class="card-head">
-          <div>
-            <span class="section-tag">Resultado</span>
-            <h2>Score final</h2>
+          <div class="card-title-group">
+            <span class="section-tag"><i data-lucide="radar" style="width: 12px; height: 12px;"></i> Diagnóstico</span>
+            <h2>Resultado Consolidado</h2>
           </div>
-          <span id="resultPill" class="status-pill neutral">Aguardando</span>
+          <span id="resultPill" class="status-pill">
+            <i data-lucide="clock" style="width: 12px; height: 12px;"></i>
+            <span id="resultPillText">Aguardando</span>
+          </span>
         </div>
 
         <div class="score-layout">
-          <div class="score-ring">
-            <div id="scoreNumber" class="score-number">--</div>
-            <div class="score-label">Score</div>
+          <!-- Animated SVG Score Ring -->
+          <div class="score-svg-container">
+            <svg viewBox="0 0 160 160">
+              <defs>
+                <linearGradient id="score-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#00b4d8" />
+                  <stop offset="100%" stop-color="#06d6a0" />
+                </linearGradient>
+              </defs>
+              <circle class="score-bg-circle" cx="80" cy="80" r="75"></circle>
+              <circle id="scoreProgress" class="score-progress-circle" cx="80" cy="80" r="75"></circle>
+            </svg>
+            <div class="score-text-overlay">
+              <div id="scoreNumber" class="score-val">--</div>
+              <div class="score-lbl">Score</div>
+            </div>
           </div>
 
           <div class="result-copy">
             <p id="resultHeadline" class="result-headline">
-              Envie o currículo para iniciar a análise.
+              Envie o currículo para iniciar a análise neural.
             </p>
             <p id="resultDetail" class="result-detail">
-              O relatório em PDF será baixado automaticamente ao final do processamento.
+              O relatório em PDF detalhado será baixado automaticamente após o processamento da análise executiva do ATS.
             </p>
+          </div>
+        </div>
 
-            <div class="metrics">
-              <div class="metric">
-                <span>Técnico</span>
-                <strong id="metricTech">--</strong>
-              </div>
-              <div class="metric">
-                <span>Senioridade</span>
-                <strong id="metricSenior">--</strong>
-              </div>
-              <div class="metric">
-                <span>NLP</span>
-                <strong id="metricNlp">--</strong>
-              </div>
-              <div class="metric">
-                <span>Fricção</span>
-                <strong id="metricFriction">--</strong>
-              </div>
+        <!-- Metrics Grid -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-card-header">
+              <span class="metric-label">Técnico</span>
+              <div class="metric-icon-box"><i data-lucide="cpu" style="width: 15px; height: 15px;"></i></div>
             </div>
+            <strong id="metricTech" class="metric-val">--</strong>
+          </div>
+          <div class="metric-card">
+            <div class="metric-card-header">
+              <span class="metric-label">Senioridade</span>
+              <div class="metric-icon-box"><i data-lucide="user-check" style="width: 15px; height: 15px;"></i></div>
+            </div>
+            <strong id="metricSenior" class="metric-val">--</strong>
+          </div>
+          <div class="metric-card">
+            <div class="metric-card-header">
+              <span class="metric-label">Semântica</span>
+              <div class="metric-icon-box"><i data-lucide="fingerprint" style="width: 15px; height: 15px;"></i></div>
+            </div>
+            <strong id="metricNlp" class="metric-val">--</strong>
+          </div>
+          <div class="metric-card">
+            <div class="metric-card-header">
+              <span class="metric-label">Fricção</span>
+              <div class="metric-icon-box"><i data-lucide="alert-triangle" style="width: 15px; height: 15px;"></i></div>
+            </div>
+            <strong id="metricFriction" class="metric-val">--</strong>
+          </div>
+        </div>
+
+        <!-- Detailed Executive Audit Section -->
+        <div class="audit-report-container">
+          <div class="audit-title">
+            <i data-lucide="file-text" style="width: 16px; height: 16px; color: var(--primary);"></i>
+            Parecer Consolidado do Recrutador
+          </div>
+          <div id="auditText" class="audit-text">
+            Aguardando o processamento do currículo para exibir o parecer executivo, análise de riscos e gaps técnicos.
           </div>
         </div>
       </article>
 
+      <!-- Status Card -->
       <article class="card status-card">
         <div class="card-head">
-          <div>
-            <span class="section-tag">Status</span>
-            <h2>Operação</h2>
+          <div class="card-title-group">
+            <span class="section-tag"><i data-lucide="activity" style="width: 12px; height: 12px;"></i> Console</span>
+            <h2>Histórico de Operação</h2>
           </div>
         </div>
-        <div id="status" class="status idle">Aguardando envio do currículo para iniciar a análise.</div>
+        <div id="status" class="status-bar idle">
+          <i data-lucide="info" style="width: 16px; height: 16px; flex-shrink: 0;"></i>
+          <span>Aguardando envio do currículo para iniciar o pipeline de análise.</span>
+        </div>
       </article>
     </section>
   </main>
 
+  <!-- Loading Overlay -->
   <div id="overlay" class="overlay hidden">
     <div class="overlay-card">
       <div class="spinner-large"></div>
-      <h3>Processando análise</h3>
-      <p>Estamos lendo o currículo e montando o relatório executivo.</p>
+      <h3>Processando Análise</h3>
+      <p>Estamos extraindo o texto do PDF, otimizando o currículo e rodando a avaliação neural com LLMs de auditoria. Isso pode levar alguns segundos.</p>
     </div>
   </div>
 
   <script>
+    // Hydrate initial Lucide icons
+    lucide.createIcons();
+
     let jobsCache = [];
+
+    // Dropzone logic
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('cv_file');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('dragover');
+    });
+
+    ['dragleave', 'dragend'].forEach(type => {
+      dropzone.addEventListener(type, () => {
+        dropzone.classList.remove('dragover');
+      });
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      
+      if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        updateFileInfo();
+      }
+    });
+
+    fileInput.addEventListener('change', updateFileInfo);
+
+    function updateFileInfo() {
+      if (fileInput.files.length) {
+        fileName.textContent = fileInput.files[0].name;
+        fileInfo.style.display = 'inline-flex';
+        // Add dynamic success styling to dropzone outline
+        dropzone.style.borderColor = 'var(--cta)';
+        lucide.createIcons();
+      } else {
+        fileInfo.style.display = 'none';
+        dropzone.style.borderColor = '';
+      }
+    }
 
     async function loadJobs() {
       const res = await fetch('/api/jobs');
@@ -151,23 +271,87 @@
 
     function setStatus(message, type = 'idle') {
       const status = document.getElementById('status');
-      status.className = `status ${type}`;
-      status.textContent = message;
+      
+      // Update icons depending on state
+      let iconName = 'info';
+      if (type === 'loading') iconName = 'loader';
+      if (type === 'success') iconName = 'check-circle';
+      if (type === 'error') iconName = 'x-circle';
+
+      status.className = `status-bar ${type}`;
+      status.innerHTML = `<i data-lucide="${iconName}" style="width: 16px; height: 16px; flex-shrink: 0;"></i> <span>${message}</span>`;
+      lucide.createIcons();
     }
 
     function setPills(text, type) {
       const statusPill = document.getElementById('statusPill');
       const resultPill = document.getElementById('resultPill');
+      const statusPillText = document.getElementById('statusPillText');
+      const resultPillText = document.getElementById('resultPillText');
+      
       statusPill.className = `status-pill ${type}`;
       resultPill.className = `status-pill ${type}`;
-      statusPill.textContent = text;
-      resultPill.textContent = text;
+      
+      let iconName = 'clock';
+      if (type === 'success') iconName = 'check';
+      if (type === 'warning') iconName = 'alert-circle';
+      if (type === 'error') iconName = 'alert-triangle';
+
+      statusPill.innerHTML = `<i data-lucide="${iconName}" style="width: 12px; height: 12px;"></i> <span id="statusPillText">${text}</span>`;
+      resultPill.innerHTML = `<i data-lucide="${iconName}" style="width: 12px; height: 12px;"></i> <span id="resultPillText">${text}</span>`;
+      lucide.createIcons();
+    }
+
+    // Modern Markdown Parser
+    function renderMarkdown(text) {
+      if (!text) return '';
+      let html = text
+        .replace(/\r/g, '')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .split('\n')
+        .map(line => {
+          line = line.trim();
+          if (line.startsWith('#')) {
+            const level = (line.match(/^#+/) || ['#'])[0].length;
+            const content = line.replace(/^#+\s*/, '');
+            return `<h${level + 1}>${content}</h${level + 1}>`;
+          }
+          if (line.startsWith('-') || line.startsWith('*')) {
+            const content = line.replace(/^[-*]\s*/, '');
+            return `<li>${content}</li>`;
+          }
+          if (line.startsWith('&gt;') || line.startsWith('>')) {
+            const content = line.replace(/^(&gt;|>)\s*/, '');
+            return `<blockquote>${content}</blockquote>`;
+          }
+          if (line === '') return '';
+          return `<p>${line}</p>`;
+        })
+        .join('\n');
+      
+      html = html.replace(/(<li>.*?<\/li>)+/gs, (match) => `<ul>${match}</ul>`);
+      return html;
     }
 
     function setResult(score, headline, detail, pillType = 'neutral') {
-      document.getElementById('scoreNumber').textContent = score !== null ? score : '--';
+      const scoreNum = document.getElementById('scoreNumber');
+      const scoreCircle = document.getElementById('scoreProgress');
+      const radius = 75;
+      const circumference = 2 * Math.PI * radius; // 471.24
+      
+      scoreNum.textContent = score !== null ? score : '--';
       document.getElementById('resultHeadline').textContent = headline || 'Envie o currículo para iniciar a análise.';
       document.getElementById('resultDetail').textContent = detail || 'O relatório em PDF será baixado automaticamente ao final do processamento.';
+      
+      // Animate progress circle
+      if (score !== null && !isNaN(score)) {
+        const val = parseFloat(score);
+        const offset = circumference - (val / 100) * circumference;
+        scoreCircle.style.strokeDashoffset = offset;
+      } else {
+        scoreCircle.style.strokeDashoffset = circumference;
+      }
+
       setPills(
         pillType === 'success' ? 'Concluído' : pillType === 'warning' ? 'Atenção' : pillType === 'error' ? 'Falha' : 'Aguardando',
         pillType
@@ -179,6 +363,15 @@
       document.getElementById('metricSenior').textContent = senior;
       document.getElementById('metricNlp').textContent = nlp;
       document.getElementById('metricFriction').textContent = friction;
+    }
+
+    function setAuditText(text) {
+      const container = document.getElementById('auditText');
+      if (!text) {
+        container.textContent = 'Aguardando o processamento do currículo para exibir o parecer executivo, análise de riscos e gaps técnicos.';
+      } else {
+        container.innerHTML = renderMarkdown(text);
+      }
     }
 
     function showOverlay(show) {
@@ -196,6 +389,7 @@
       showOverlay(true);
       setStatus('Processando análise...', 'loading');
       setResult(null, 'Processando a solicitação.', 'O sistema está executando a análise neural.', 'neutral');
+      setAuditText(null);
 
       try {
         const res = await fetch('/api/analyze', {
@@ -229,6 +423,13 @@
           friction: `-${data.penalidade}`,
         });
 
+        // Set detailed audit text in front-end
+        if (data.analise_texto) {
+          setAuditText(data.analise_texto);
+        } else {
+          setAuditText('Diagnóstico neural concluído. Veja os detalhes e a recomendação no PDF do relatório executivo.');
+        }
+
         const pdfRes = await fetch(data.download_url);
         if (!pdfRes.ok) throw new Error('Análise concluída, mas não foi possível baixar o PDF.');
 
@@ -244,6 +445,7 @@
       } catch (err) {
         setStatus(err.message || 'Falha inesperada no processamento.', 'error');
         setResult('--', 'Falha na análise.', err.message || 'Não foi possível gerar o relatório.', 'error');
+        setAuditText('Ocorreu um erro no processamento do seu PDF. Detalhes: ' + (err.message || 'Erro de comunicação com o servidor neural.'));
       } finally {
         submitBtn.disabled = false;
         submitBtn.classList.remove('loading');

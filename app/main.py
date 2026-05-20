@@ -593,6 +593,7 @@ async def analyze(job_id: str = Form(...), descricao_customizada: str = Form("")
         "detail": f"Modelo auditoria: {result['audit_model_used']}. PDF pronto para download.",
         "fallbacks": result["fallbacks"],
         "audit_model_used": result["audit_model_used"],
+        "analise_texto": result["analise_texto"],
     })
 
 @app.get("/api/result/{run_id}")
