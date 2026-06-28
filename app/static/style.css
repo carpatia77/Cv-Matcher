@@ -674,6 +674,73 @@ button.loading .btn-spinner {
   line-height: 1.6;
 }
 
+/* Progress Bar & New Controls */
+.progress-bar-container {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  margin: 24px 0 12px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: var(--radius-sm);
+  transition: width 0.4s ease;
+}
+
+.progress-step-text {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--primary);
+}
+
+.btn-secondary.hidden {
+  display: none;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.field-error {
+  color: var(--error-text);
+  background: var(--error-bg);
+  border: 1px solid rgba(239, 35, 60, 0.2);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+
+.field-error.hidden {
+  display: none;
+}
+
 /* Responsive Breakpoints */
 @media (max-width: 880px) {
   .grid-2 {

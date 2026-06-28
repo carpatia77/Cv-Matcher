@@ -1,64 +1,94 @@
-# ATS Predictor MVP
+# CV-Matcher (ATS Predictor Neural)
 
-MVP em FastAPI para upload de curriculo em PDF, selecao de vaga e geracao de diagnostico ATS em PDF usando NVIDIA API.
+Plataforma em FastAPI para diagnóstico preditivo de aderência profissional. Realiza extração de texto de currículos em PDF, otimização semântica, cálculo de similaridade vetorial via embeddings NVIDIA e auditoria neural com modelos DeepSeek avançados.
 
-## Funcionalidades
+## 🚀 Funcionalidades Refatoradas
 
-- Upload de curriculo PDF
-- Seletor expandido de vagas via `data/jobs.json`
-- Descricao customizavel da vaga
-- Otimizacao semantica com `meta/llama-3.3-70b-instruct`
-- Auditoria preditiva com `deepseek-ai/deepseek-v4-flash`
-- Similaridade semantica com fallback de embeddings NVIDIA
-- Exportacao do relatorio final em PDF
-- Pronto para deploy no Render
+- **Upload e Processamento Seguro**: Validação de magic bytes (`%PDF`), controle de tamanho máximo de upload (10MB) e proteção contra XSS no front-end.
+- **Fluxo Assíncrono via BackgroundTasks**: O pipeline de análise roda em background, com polling em tempo real no dashboard visualizando o andamento etapa por etapa.
+- **Persistência Robusta em SQLite**: Armazenamento seguro de vagas e do histórico de análises em `data/ats.db`.
+- **Auditoria Preditiva Precisa**: Integração validada com o catálogo NVIDIA (`deepseek-ai/deepseek-r1` e `deepseek-ai/deepseek-v3`) e fallback robusto para `meta/llama-3.3-70b-instruct`.
+- **Configurações Centralizadas**: Gestão profissional de variáveis de ambiente com `pydantic-settings`.
+- **Observabilidade e Qualidade**: Logging estruturado JSON, proteção contra abusos via *rate limiting* (`slowapi`) e suíte completa de testes automatizados (`pytest`).
 
-## Estrutura
+## 📁 Estrutura do Projeto
 
 ```bash
-ats-mvp/
+cv-matcher/
 ├── app/
-│   ├── main.py
-│   ├── static/style.css
-│   └── templates/index.html
-├── data/jobs.json
-├── requirements.txt
-├── render.yaml
+│   ├── config.py          # Central de configurações (pydantic-settings)
+│   ├── database.py        # Conexão e persistência SQLite
+│   ├── logger.py          # Logging estruturado em JSON
+│   ├── main.py            # Rotas FastAPI e controle de pipeline
+│   ├── static/
+│   │   ├── app.js         # Lógica assíncrona do dashboard (polling, validações)
+│   │   └── style.css      # Design System (Tema Dark Ocean)
+│   └── templates/
+│       └── index.html     # Interface do Dashboard
+├── data/
+│   └── ats.db             # Banco de dados SQLite gerado automaticamente
+├── tests/
+│   └── test_api.py        # Suíte de testes automatizados
+├── requirements.txt       # Dependências de produção fixadas
+├── requirements-dev.txt   # Dependências de desenvolvimento e teste
+├── Dockerfile             # Imagem otimizada para produção
+├── docker-compose.yml     # Orquestração para deploy na nuvem
+├── .env.example           # Modelo de variáveis de ambiente
 └── README.md
 ```
 
-## Execucao local
+## 💻 Execução Local
+
+### Opção 1: Ambiente Virtual (Python 3.11+)
+
+1. Clone o repositório e crie o ambiente virtual:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # Linux/macOS
+   # .venv\Scripts\activate   # Windows PowerShell
+   ```
+2. Instale as dependências:
+   ```bash
+   pip install -r requirements.txt
+   pip install -r requirements-dev.txt
+   ```
+3. Configure as variáveis de ambiente (copie `.env.example` para `.env`):
+   ```bash
+   cp .env.example .env
+   # Edite o arquivo .env inserindo sua NVIDIA_API_KEY
+   ```
+4. Inicie o servidor:
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+5. Acesse `http://localhost:8000`.
+
+### Opção 2: Docker Compose
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # Linux/macOS
-# .venv\Scripts\activate   # Windows PowerShell
-pip install -r requirements.txt
-export NVIDIA_API_KEY="sua-chave-aqui"
-uvicorn app.main:app --reload
+docker compose up --build
 ```
+Acesse `http://localhost:8000`.
 
-Abra `http://127.0.0.1:8000`.
+## ☁️ Deploy na Oracle Cloud VM
 
-## Deploy no Render
+1. Na sua VM da Oracle Cloud (Ubuntu/Oracle Linux), certifique-se de ter o Docker e Docker Compose instalados.
+2. Clone o repositório para a VM.
+3. Crie e configure o arquivo `.env` na raiz do projeto com sua `NVIDIA_API_KEY` e defina `APP_ENV=production`.
+4. Inicie o contêiner em modo detached:
+   ```bash
+   docker compose up -d --build
+   ```
+5. Configure as regras de firewall da VM (Ingress Rules na Oracle Cloud VCN e `ufw`/`iptables` local) para liberar a porta 8000 (ou configure um proxy reverso como Nginx apontando para `localhost:8000`).
 
-1. Suba esta pasta para um repositorio no GitHub.
-2. No Render, crie um novo Web Service a partir do repo.
-3. O arquivo `render.yaml` pode ser detectado automaticamente.
-4. Configure a variavel `NVIDIA_API_KEY` no painel do Render.
-5. Faça o deploy.
+## 🧪 Testes e Qualidade
 
-## Observacoes importantes
+Para rodar a suíte de testes automatizados e validação de código:
 
-- O processamento e sincrono e pode levar de 20 a 60 segundos.
-- O filesystem do Web Service e temporario; neste MVP o PDF e retornado diretamente na resposta.
-- Se quiser historico de analises, storage persistente e autenticacao, isso entra na fase 2.
-- Alguns modelos de embedding podem nao estar disponiveis para toda conta NVIDIA; por isso o codigo possui fallback.
+```bash
+# Executar testes
+pytest -v
 
-## Proximos passos sugeridos
-
-- Adicionar logs estruturados
-- Criar pagina de resultado HTML alem do PDF
-- Migrar `jobs.json` para banco de dados
-- Adicionar autenticacao
-- Desacoplar processamento pesado em worker
+# Verificar linting e formatação com ruff
+ruff check .
+```

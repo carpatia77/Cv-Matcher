@@ -1,0 +1,19 @@
+services:
+  ats-web:
+    build: .
+    container_name: ats-web-prod
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - APP_ENV=production
+    volumes:
+      - ./data:/app/data
+      - ./tmp:/app/tmp
+    networks:
+      - ats-network
+
+networks:
+  ats-network:
+    driver: bridge

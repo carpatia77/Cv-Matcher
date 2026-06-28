@@ -1,0 +1,89 @@
+# ============================================================
+# ANTIGRAVITY IGNORE — PERFIS OPERACIONAIS
+# Objetivo:
+# - reduzir contexto irrelevante
+# - acelerar indexação
+# - economizar tokens
+# - manter visíveis os arquivos centrais do projeto
+# ============================================================
+
+
+# ============================================================
+# PERFIL BASE — ATIVAR SEMPRE
+# ============================================================
+
+*.log
+*.tmp
+*.temp
+*.pid
+*.swp
+*.swo
+
+tmp/
+temp/
+cache/
+artifacts/
+artifact/
+output/
+outputs/
+exports/
+downloads/
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+.cache/
+.idea/
+*.code-workspace
+
+
+# ============================================================
+# PERFIL PYTHON — ATIVAR EM PROJETOS PY / FASTAPI / AUTOMATION
+# ============================================================
+
+.venv/
+venv/
+env/
+ENV/
+
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.tox/
+.nox/
+
+.coverage
+.coverage.*
+htmlcov/
+
+*.pyc
+*.pyo
+*.pyd
+*.so
+
+*.egg-info/
+.eggs/
+
+*.generated.py
+*.generated.json
+*.generated.csv
+
+.ipynb_checkpoints/
+
+
+# ============================================================
+# EXCEÇÕES IMPORTANTES — NÃO IGNORAR
+# ============================================================
+
+!README.md
+!requirements.txt
+!render.yaml
+!app/
+!data/
+!docs/
+!schemas/
+!contracts/
+!migrations/
