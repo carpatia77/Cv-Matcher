@@ -853,10 +853,9 @@ async def analyze(
     magic_bytes = await cv_file.read(4)
     if magic_bytes != b"%PDF":
         raise HTTPException(status_code=400, detail="O arquivo enviado não é um PDF válido (magic bytes incorretos).")
-    await cv_file.seek(0, 2) # ir para o final
-    file_size = cv_file.file.tell()
     await cv_file.seek(0) # voltar pro começo
 
+    file_size = cv_file.size if hasattr(cv_file, "size") and cv_file.size is not None else 0
     if file_size > settings.MAX_UPLOAD_MB * 1024 * 1024:
         raise HTTPException(status_code=400, detail=f"O arquivo excede o limite de {settings.MAX_UPLOAD_MB} MB.")
 
