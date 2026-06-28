@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     TIMEOUT_AUDIT: float = 120.0
     TIMEOUT_PDF: float = 30.0
     HTTPX_TIMEOUT: float = 240.0
-    AUDIT_MAX_TOKENS: int = 1500
+    AUDIT_MAX_TOKENS: int = 4096
     MAX_UPLOAD_MB: int = 10
 
     DATABASE_URL: str = f"sqlite:///{BASE_DIR}/data/ats.db"

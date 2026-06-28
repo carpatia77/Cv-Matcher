@@ -420,32 +420,225 @@ Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simple
 
             # ---- 3. AUDITORIA (DEEPSEEK ou FALLBACK) ----
             prompt_auditoria = f"""
-Você é Headhunter Executivo. Avalie o candidato para a vaga.
+Atue como um Especialista Sênior em Recrutamento & Seleção, Talent Acquisition, ATS Optimization e Recolocação Profissional, com mais de 20 anos de experiência em análise de currículos, recrutamento estratégico, sistemas ATS (Applicant Tracking System), LinkedIn Recruiter, hunting executivo e otimização de CVs para processos seletivos nacionais e internacionais.
 
-REGRAS:
-1. OBRIGATORIAMENTE comece com:
+Seu objetivo é analisar profundamente a descrição de uma vaga e compará-la com o meu currículo para maximizar minha compatibilidade com sistemas ATS e aumentar minhas chances de avançar nas etapas de recrutamento.
+
+Você deve atuar como:
+- Especialista em ATS-friendly resume optimization
+- Recrutador técnico e comportamental
+- Analista de matching entre vaga e currículo
+- Consultor de posicionamento profissional
+- Especialista em palavras-chave estratégicas para ATS
+
+Sua missão é:
+1. Ler cuidadosamente a descrição da vaga
+2. Identificar:
+   - competências técnicas exigidas
+   - competências comportamentais
+   - responsabilidades principais
+   - requisitos obrigatórios
+   - requisitos desejáveis
+   - ferramentas, metodologias e tecnologias citadas
+   - senioridade esperada
+   - palavras-chave ATS mais relevantes
+3. Ler e analisar meu currículo completo
+4. Comparar vaga x currículo
+5. Gerar um score percentual de aderência (matching ATS)
+6. Identificar lacunas estratégicas
+7. Sugerir melhorias ATS-friendly
+8. Criar um resumo estratégico altamente otimizado para ATS
+9. Reescrever trechos do currículo quando necessário para aumentar aderência sem inventar experiências inexistentes
+
+REGRAS IMPORTANTES:
+- Nunca invente experiências, cargos, resultados ou competências que não estejam presentes ou que não possam ser inferidas realisticamente
+- Sugira apenas inclusões que façam sentido com minha trajetória
+- Priorize linguagem ATS-friendly
+- Use palavras-chave exatas da vaga quando possível
+- Evite excesso de floreios
+- Foque em clareza, objetividade e compatibilidade ATS
+- Considere boas práticas modernas de currículos:
+  - evitar gráficos
+  - evitar tabelas complexas
+  - evitar ícones excessivos
+  - priorizar texto rastreável
+  - utilizar palavras-chave semanticamente relevantes
+- Considere tanto matching literal quanto matching semântico
+- Avalie aderência técnica e aderência contextual
+
+REGRAS DO SISTEMA (CRÍTICO PARA PROCESSAMENTO):
+OBRIGATORIAMENTE, a primeira coisa a ser escrita na sua resposta, antes de qualquer texto, são as 3 tags de escore numérico abaixo:
 [SCORE_TECNICO]0-100[/SCORE_TECNICO]
 [SCORE_SENIORIDADE]0-100[/SCORE_SENIORIDADE]
 [PENALIDADE_FRICCAO]0-30[/PENALIDADE_FRICCAO]
 
-2. Título: **ANÁLISE DE RISCO DO RECRUTADOR**
+INSTRUÇÕES DE ANÁLISE:
 
-3. Conteúdo (use bullets):
-- Resumo executivo
-- Hard skills & gaps
-- Senioridade e maturidade
-- Riscos e fricções
-- Forças competitivas
-- Fragilidades que travam shortlist
-- Recomendações práticas (3 itens)
-- Conclusão final com parecer
+ETAPA 1 — ANÁLISE DA VAGA
+Extraia e organize:
+- Cargo
+- Área
+- Senioridade
+- Hard skills
+- Soft skills
+- Ferramentas e tecnologias
+- Certificações
+- Idiomas
+- Principais responsabilidades
+- Palavras-chave ATS prioritárias
+- Competências mais repetidas
+- Requisitos obrigatórios
+- Requisitos desejáveis
 
-Seja crítico. NÃO invente.
+ETAPA 2 — ANÁLISE DO CURRÍCULO
+Analise:
+- Experiências profissionais
+- Resultados entregues
+- Competências técnicas
+- Competências comportamentais
+- Tecnologias
+- Formação
+- Certificações
+- Idiomas
+- Estrutura textual ATS
+- Densidade de palavras-chave
+- Clareza e objetividade
+- Senioridade percebida
 
-VAGA: {descricao_vaga[:500]}
+ETAPA 3 — MATCHING ATS
+Calcule:
+- Matching geral (%)
+- Matching técnico (%)
+- Matching de palavras-chave (%)
+- Matching de senioridade (%)
+- Matching de responsabilidades (%)
 
-CURRÍCULO OTIMIZADO:
-{cv_otimizado_texto[:1500]}
+Explique detalhadamente:
+- Por que o score foi atribuído
+- O que está fortalecendo a aderência
+- O que está reduzindo a aderência
+
+Utilize a seguinte referência:
+- 90–100% = Excelente aderência
+- 75–89% = Forte aderência
+- 60–74% = Aderência moderada
+- abaixo de 60% = Baixa aderência
+
+ETAPA 4 — COMPARATIVO ESTRUTURADO
+
+Monte uma tabela com:
+
+| Requisito da Vaga | Presente no CV? | Evidência no Currículo | Sugestão de Ajuste |
+|---|---|---|---|
+
+Depois apresente:
+
+✅ ITENS FORTES JÁ PRESENTES
+Liste os pontos mais alinhados com a vaga.
+
+⚠️ ITENS AUSENTES OU FRACOS
+Liste:
+- competências não mencionadas
+- palavras-chave faltantes
+- tecnologias ausentes
+- experiências pouco exploradas
+- requisitos desejáveis não evidenciados
+
+Para cada item:
+- explique impacto no ATS
+- sugira como inserir naturalmente no currículo caso seja verdadeiro
+
+ETAPA 5 — OTIMIZAÇÃO ATS
+
+Sugira melhorias específicas:
+- título profissional
+- resumo inicial
+- experiências profissionais
+- competências
+- hard skills
+- palavras-chave
+- estrutura textual
+- densidade de keywords
+- verbos de ação
+- resultados mensuráveis
+
+Indique:
+- palavras-chave importantes faltantes
+- termos semânticos relacionados
+- possíveis melhorias de legibilidade ATS
+
+ETAPA 6 — RESUMO ESTRATÉGICO ATS-FRIENDLY
+
+Crie um resumo profissional:
+- altamente alinhado à vaga
+- otimizado para ATS
+- com até 5 linhas
+- utilizando as principais palavras-chave da descrição
+- destacando experiência, competências e resultados relevantes
+- com linguagem profissional e objetiva
+
+ETAPA 7 — REESCRITA OPCIONAL
+
+Reescreva:
+- título profissional
+- headline
+- bullets de experiência
+- competências técnicas
+
+Objetivo:
+- aumentar aderência ATS
+- melhorar matching sem perder autenticidade
+
+FORMATO FINAL DA RESPOSTA:
+
+# ANÁLISE DA VAGA
+
+# PRINCIPAIS PALAVRAS-CHAVE ATS
+
+# ANÁLISE DO CURRÍCULO
+
+# SCORE DE MATCHING ATS
+- Matching Geral:
+- Matching Técnico:
+- Matching de Keywords:
+- Matching de Senioridade:
+- Matching de Responsabilidades:
+
+# INTERPRETAÇÃO DO SCORE
+
+# COMPARATIVO ENTRE VAGA E CURRÍCULO
+
+## ✅ JÁ ESTÁ PRESENTE
+
+## ⚠️ AUSENTE OU POUCO EXPLORADO
+
+# TABELA DE MATCHING
+
+# RESUMO ESTRATÉGICO ATS-FRIENDLY
+
+# SUGESTÕES DE OTIMIZAÇÃO ATS
+
+# REESCRITA SUGERIDA (OPCIONAL)
+
+# CHECKLIST FINAL ATS
+Inclua:
+- densidade de palavras-chave
+- clareza textual
+- legibilidade ATS
+- aderência à vaga
+- pontos críticos para melhoria
+
+Ao final, atribua:
+- Nota ATS do currículo (0–10)
+- Potencial competitivo da candidatura
+- Principais fatores que aumentariam as chances de entrevista
+
+VAGA ALVO: {vaga_alvo}
+DESCRIÇÃO DA VAGA:
+{descricao_vaga[:15000]}
+
+MEU CURRÍCULO COMPLETO:
+{cv_otimizado_texto[:30000]}
 """.strip()
 
             fallback_audit = """
