@@ -38,12 +38,11 @@
       <form id="atsForm" class="form">
         <div class="grid-2">
           <div class="field">
-            <label for="job_id">
+            <label for="titulo_vaga">
               <i data-lucide="briefcase" style="width: 16px; height: 16px;"></i>
-              Vaga-alvo
+              Título da Vaga / Cargo Alvo
             </label>
-            <select id="job_id" name="job_id"></select>
-            <div id="jobError" class="field-error hidden">Erro ao carregar vagas. Digite a descrição abaixo.</div>
+            <input type="text" id="titulo_vaga" name="titulo_vaga" placeholder="Ex: Desenvolvedor Python Pleno" required />
           </div>
 
           <div class="field">
@@ -65,14 +64,15 @@
         </div>
 
         <div class="field">
-          <label for="descricao_customizada">
+          <label for="descricao_vaga">
             <i data-lucide="text-quote" style="width: 16px; height: 16px;"></i>
-            Descrição da vaga
+            Descrição da Vaga
           </label>
           <textarea
-            id="descricao_customizada"
-            name="descricao_customizada"
-            placeholder="A descrição da vaga será preenchida automaticamente com base na vaga selecionada, mas você pode editá-la conforme achar necessário."
+            id="descricao_vaga"
+            name="descricao_vaga"
+            placeholder="Cole aqui os requisitos, atribuições e descrição completa da vaga desejada..."
+            required
           ></textarea>
         </div>
 

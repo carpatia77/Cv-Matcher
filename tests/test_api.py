@@ -32,8 +32,9 @@ def test_analyze_invalid_file(client):
     # Testar envio de arquivo não-PDF
     response = client.post(
         "/api/analyze",
-        data={"job_id": "dev_python", "descricao_customizada": ""},
+        data={"titulo_vaga": "Dev Python", "descricao_vaga": "FastAPI, Docker"},
         files={"cv_file": ("teste.txt", b"conteudo invalido", "text/plain")}
     )
     assert response.status_code == 400
     assert "PDF" in response.json()["detail"]
+

@@ -1,7 +1,6 @@
 // Hydrate initial Lucide icons
 lucide.createIcons();
 
-let jobsCache = [];
 let lastDownloadUrl = null;
 
 // Dropzone logic
@@ -77,37 +76,6 @@ function updateFileInfo() {
   } else {
     fileInfo.style.display = 'none';
     dropzone.style.borderColor = '';
-  }
-}
-
-async function loadJobs() {
-  const select = document.getElementById('job_id');
-  const jobError = document.getElementById('jobError');
-  
-  try {
-    const res = await fetch('/api/jobs');
-    if (!res.ok) throw new Error('Erro ao carregar vagas');
-    jobsCache = await res.json();
-    select.innerHTML = '';
-
-    jobsCache.forEach(job => {
-      const option = document.createElement('option');
-      option.value = job.id;
-      option.textContent = `${job.titulo} (${job.categoria || 'Geral'})`;
-      select.appendChild(option);
-    });
-
-    if (jobsCache.length) {
-      document.getElementById('descricao_customizada').value = jobsCache[0].descricao;
-    }
-
-    select.addEventListener('change', () => {
-      const selected = jobsCache.find(j => j.id === select.value);
-      document.getElementById('descricao_customizada').value = selected?.descricao || '';
-    });
-  } catch (err) {
-    jobError.classList.remove('hidden');
-    select.innerHTML = '<option value="">(Personalizada)</option>';
   }
 }
 
@@ -357,5 +325,3 @@ document.getElementById('atsForm').addEventListener('submit', async (e) => {
     showOverlay(false);
   }
 });
-
-loadJobs();
