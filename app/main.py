@@ -35,8 +35,8 @@ TMP_DIR = BASE_DIR / "tmp"
 
 # Modelos DeepSeek válidos no catálogo NVIDIA
 DEEPSEEK_MODELS = [
-    "deepseek-ai/deepseek-r1",
-    "deepseek-ai/deepseek-v3",
+    "deepseek-ai/deepseek-v4-pro",
+    "deepseek-ai/deepseek-v4-flash",
 ]
 FALLBACK_AUDIT_MODEL = "meta/llama-3.3-70b-instruct"
 
