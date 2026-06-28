@@ -874,7 +874,7 @@ async def analyze(
         shutil.copyfileobj(cv_file.file._file, f)
 
     save_run_db(run_id, status="processing")
-    background_tasks.add(run_ats_pipeline_bg, run_id, str(input_pdf), str(output_pdf), vaga_alvo, descricao_final)
+    background_tasks.add_task(run_ats_pipeline_bg, run_id, str(input_pdf), str(output_pdf), vaga_alvo, descricao_final)
     cleanup_expired_runs()
 
     return JSONResponse(content={
