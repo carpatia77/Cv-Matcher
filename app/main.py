@@ -737,11 +737,10 @@ async def debug_models():
 async def analyze(
     request: Request,
     background_tasks: BackgroundTasks,
-    titulo_vaga: str = Form(...),
     descricao_vaga: str = Form(...),
     cv_file: UploadFile = File(...)
 ):
-    logger.info(f"analyze start filename={cv_file.filename} titulo_vaga={titulo_vaga}")
+    logger.info(f"analyze start filename={cv_file.filename}")
     if not settings.NVIDIA_API_KEY:
         raise HTTPException(status_code=500, detail="NVIDIA_API_KEY não configurada no servidor.")
 
@@ -759,15 +758,16 @@ async def analyze(
     if file_size > settings.MAX_UPLOAD_MB * 1024 * 1024:
         raise HTTPException(status_code=400, detail=f"O arquivo excede o limite de {settings.MAX_UPLOAD_MB} MB.")
 
-    if not titulo_vaga.strip() or not descricao_vaga.strip():
-        raise HTTPException(status_code=400, detail="O título e a descrição da vaga são obrigatórios.")
+    if not descricao_vaga.strip():
+        raise HTTPException(status_code=400, detail="A descrição da vaga é obrigatória.")
 
     descricao_final = descricao_vaga.strip()
-    vaga_alvo = titulo_vaga.strip()
+    primeira_linha = descricao_final.split("\n")[0].strip()
+    vaga_alvo = primeira_linha[:40] if primeira_linha else "Vaga Customizada"
     run_id = uuid.uuid4().hex
     output_pdf = TMP_DIR / f"{run_id}.pdf"
     input_pdf = TMP_DIR / f"input_{run_id}.pdf"
-    logger.info(f"analyze prepared run_id={run_id} output_pdf={output_pdf}")
+    logger.info(f"analyze prepared run_id={run_id} output_pdf={output_pdf} vaga_alvo={vaga_alvo}")
 
     with open(input_pdf, "wb") as f:
         shutil.copyfileobj(cv_file.file._file, f)
@@ -782,6 +782,7 @@ async def analyze(
         "status_url": f"/api/status/{run_id}",
         "message": "Análise iniciada em background."
     })
+
 
 
 @app.get("/api/status/{run_id}")

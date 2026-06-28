@@ -36,31 +36,21 @@
       </div>
 
       <form id="atsForm" class="form">
-        <div class="grid-2">
-          <div class="field">
-            <label for="titulo_vaga">
-              <i data-lucide="briefcase" style="width: 16px; height: 16px;"></i>
-              Título da Vaga / Cargo Alvo
-            </label>
-            <input type="text" id="titulo_vaga" name="titulo_vaga" placeholder="Ex: Desenvolvedor Python Pleno" required />
-          </div>
-
-          <div class="field">
-            <label>
-              <i data-lucide="file-up" style="width: 16px; height: 16px;"></i>
-              Currículo em PDF
-            </label>
-            <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Área para envio do currículo em PDF">
-              <i data-lucide="upload-cloud" class="dropzone-icon" style="width: 28px; height: 28px;"></i>
-              <span class="dropzone-text">Arraste seu PDF aqui ou <strong>procure no computador</strong></span>
-              <input id="cv_file" name="cv_file" type="file" accept=".pdf" required />
-              <div id="fileInfo" class="file-info">
-                <i data-lucide="file-check-2" style="width: 14px; height: 14px;"></i>
-                <span id="fileName">Nenhum arquivo</span>
-              </div>
+        <div class="field">
+          <label>
+            <i data-lucide="file-up" style="width: 16px; height: 16px;"></i>
+            Currículo em PDF
+          </label>
+          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Área para envio do currículo em PDF">
+            <i data-lucide="upload-cloud" class="dropzone-icon" style="width: 28px; height: 28px;"></i>
+            <span class="dropzone-text">Arraste seu PDF aqui ou <strong>procure no computador</strong></span>
+            <input id="cv_file" name="cv_file" type="file" accept=".pdf" required />
+            <div id="fileInfo" class="file-info">
+              <i data-lucide="file-check-2" style="width: 14px; height: 14px;"></i>
+              <span id="fileName">Nenhum arquivo</span>
             </div>
-            <div id="fileError" class="field-error hidden"></div>
           </div>
+          <div id="fileError" class="field-error hidden"></div>
         </div>
 
         <div class="field">
