@@ -1,6 +1,5 @@
 import sqlite3
 import json
-from datetime import datetime
 from app.config import BASE_DIR
 from app.logger import logger
 
