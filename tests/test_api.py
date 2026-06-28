@@ -38,4 +38,14 @@ def test_analyze_invalid_file(client):
     assert response.status_code == 400
     assert "PDF" in response.json()["detail"]
 
-
+def test_analyze_valid_pdf(client):
+    # Testar envio de arquivo PDF com magic bytes %PDF corretos
+    response = client.post(
+        "/api/analyze",
+        data={"descricao_vaga": "Engenheiro de IA, Python, PyTorch"},
+        files={"cv_file": ("curriculo.pdf", b"%PDF-1.4... conteudo simulado de pdf", "application/pdf")}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "processing"
+    assert "run_id" in data
