@@ -275,7 +275,7 @@ document.getElementById('atsForm').addEventListener('submit', async (e) => {
     let attempts = 0;
     let successData = null;
 
-    while (attempts < 60) {
+    while (attempts < 300) {
       await new Promise(r => setTimeout(r, 2000));
       attempts++;
 
