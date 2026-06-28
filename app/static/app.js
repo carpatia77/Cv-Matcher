@@ -282,9 +282,9 @@ document.getElementById('atsForm').addEventListener('submit', async (e) => {
       if (attempts === 2) {
         updateProgress(2, 50, 'Otimização do currículo e modelagem de similaridade semântica');
       } else if (attempts === 5) {
-        updateProgress(3, 75, 'Auditoria neural avançada com modelos DeepSeek');
+        updateProgress(3, 75, 'Auditoria neural avançada com Llama 3.3 70B');
       } else if (attempts === 8) {
-        updateProgress(3, 85, 'Gerando Reescrita Customizada do Currículo com DeepSeek v4 Pro');
+        updateProgress(3, 85, 'Gerando Reescrita Customizada do Currículo com Llama 3.3 70B');
       }
 
       const pollRes = await fetch(statusUrl);

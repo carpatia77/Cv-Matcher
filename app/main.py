@@ -33,10 +33,9 @@ TEMPLATES_DIR = APP_DIR / "templates"
 STATIC_DIR = APP_DIR / "static"
 TMP_DIR = BASE_DIR / "tmp"
 
-# Modelos DeepSeek válidos no catálogo NVIDIA
+# Usando o Llama 3.3 70B como modelo principal e de fallback devido aos timeouts na API DeepSeek da NVIDIA
 DEEPSEEK_MODELS = [
-    "deepseek-ai/deepseek-v4-pro",
-    "deepseek-ai/deepseek-v4-flash",
+    "meta/llama-3.3-70b-instruct",
 ]
 FALLBACK_AUDIT_MODEL = "meta/llama-3.3-70b-instruct"
 
