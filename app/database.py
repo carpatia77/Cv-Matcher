@@ -41,9 +41,16 @@ def init_db():
                 audit_model_used TEXT,
                 analise_texto TEXT,
                 fallbacks_json TEXT,
+                reescrita_cv TEXT,
+                output_cv_pdf TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        try:
+            conn.execute("ALTER TABLE runs ADD COLUMN reescrita_cv TEXT")
+            conn.execute("ALTER TABLE runs ADD COLUMN output_cv_pdf TEXT")
+        except sqlite3.OperationalError:
+            pass # Colunas já existem
         
         # Verificar se existem vagas cadastradas, caso contrário popular com vagas padrão
         cur = conn.execute("SELECT COUNT(*) FROM jobs")
@@ -72,8 +79,8 @@ def save_run_db(run_id: str, status: str, result: dict = None, detail: str = Non
     with get_db() as conn:
         if status == "processing":
             conn.execute(
-                "INSERT OR REPLACE INTO runs (run_id, status, created_at) VALUES (?, ?, ?)",
-                (run_id, status, datetime.now())
+                "INSERT OR REPLACE INTO runs (run_id, status) VALUES (?, ?)",
+                (run_id, status)
             )
         elif status == "success" and result:
             fallbacks_json = json.dumps(result.get("fallbacks", {}))
@@ -85,13 +92,14 @@ def save_run_db(run_id: str, status: str, result: dict = None, detail: str = Non
                 UPDATE runs SET 
                     status = ?, pdf_path = ?, vaga_alvo = ?, score_final = ?, s_tech = ?, 
                     s_senior = ?, s_nlp = ?, penalidade = ?, headline = ?, detail = ?, 
-                    audit_model_used = ?, analise_texto = ?, fallbacks_json = ?
+                    audit_model_used = ?, analise_texto = ?, fallbacks_json = ?, reescrita_cv = ?, output_cv_pdf = ?
                 WHERE run_id = ?
             """, (
                 status, result.get("output_pdf"), result.get("vaga_alvo"), result.get("score_final"),
                 result.get("s_tech"), result.get("s_senior"), result.get("s_nlp"), result.get("penalidade"),
                 headline, detail or f"Modelo auditoria: {result.get('audit_model_used')}. PDF pronto para download.",
-                result.get("audit_model_used"), result.get("analise_texto"), fallbacks_json, run_id
+                result.get("audit_model_used"), result.get("analise_texto"), fallbacks_json,
+                result.get("reescrita_cv"), result.get("output_cv_pdf"), run_id
             ))
         elif status == "error":
             conn.execute("UPDATE runs SET status = ?, detail = ? WHERE run_id = ?", (status, detail, run_id))
@@ -111,16 +119,18 @@ def get_run_db(run_id: str):
 def cleanup_expired_runs(ttl_seconds: int = 3600):
     import os
     with get_db() as conn:
-        cur = conn.execute("SELECT run_id, pdf_path FROM runs WHERE datetime(created_at, ?) < datetime('now')", (f"+{ttl_seconds} seconds",))
+        cur = conn.execute("SELECT run_id, pdf_path, output_cv_pdf FROM runs WHERE datetime(created_at, ?) < datetime('now')", (f"+{ttl_seconds} seconds",))
         rows = cur.fetchall()
         for row in rows:
-            pdf_path = row["pdf_path"]
-            if pdf_path and os.path.exists(pdf_path):
-                try:
-                    os.remove(pdf_path)
-                    logger.debug(f"Arquivo PDF removido: {pdf_path}")
-                except Exception as e:
-                    logger.error(f"Erro ao remover arquivo PDF {pdf_path}: {e}")
+            for col in ("pdf_path", "output_cv_pdf"):
+                pdf_path = row[col]
+                if pdf_path and os.path.exists(pdf_path):
+                    try:
+                        os.remove(pdf_path)
+                        logger.debug(f"Arquivo PDF removido: {pdf_path}")
+                    except Exception as e:
+                        logger.error(f"Erro ao remover arquivo PDF {pdf_path}: {e}")
         conn.execute("DELETE FROM runs WHERE datetime(created_at, ?) < datetime('now')", (f"+{ttl_seconds} seconds",))
         conn.commit()
+
 
