@@ -214,6 +214,61 @@ def generate_pdf(vaga_alvo, score_final, s_tech, s_senior, s_nlp, penalidade, an
     pdf.output(output_path)
     return output_path
 
+class CVPDF(FPDF):
+    def header(self):
+        self.set_text_color(0, 51, 102)
+        self.set_font(self.main_font, "B", 14)
+        self.cell(0, 10, pdf_text(self, "CURRICULO OTIMIZADO PARA A VAGA"),
+                  align="C", new_x="LMARGIN", new_y="NEXT")
+        self.set_line_width(0.5)
+        self.set_draw_color(0, 51, 102)
+        self.line(15, 22, 195, 22)
+        self.ln(8)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_text_color(128, 128, 128)
+        self.set_font(self.main_font, "", 8)
+        self.cell(0, 10, pdf_text(self, f"Pagina {self.page_no()} | ATS Preditivo"), align="C")
+
+def generate_cv_pdf(vaga_alvo: str, cv_texto: str, output_path: str):
+    pdf = CVPDF()
+    configure_font(pdf)
+    pdf.set_margins(15, 25, 15)
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+    page_width = pdf.w - pdf.l_margin - pdf.r_margin
+
+    pdf.set_text_color(50, 50, 50)
+    pdf.set_font(pdf.main_font, "B", 11)
+    safe_cell(pdf, 6, f"Vaga Alvo: {vaga_alvo.upper()}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(6)
+
+    cv_limpo = strip_tags(cv_texto)
+    for p in cv_limpo.split("\n"):
+        p = p.strip()
+        if not p:
+            pdf.ln(3)
+            continue
+        pdf.set_text_color(0, 0, 0)
+        if p.startswith("#"):
+            pdf.set_font(pdf.main_font, "B", 12)
+            safe_multicell(pdf, page_width, 6, re.sub(r"^#+\s*", "", p), new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(1)
+        elif p.startswith(("-", "*")):
+            pdf.set_font(pdf.main_font, "", 11)
+            pdf.set_x(pdf.l_margin + 5)
+            safe_multicell(pdf, page_width - 5, 5.5, re.sub(r"^[\-\*]\s*", "- ", p), new_x="LMARGIN", new_y="NEXT")
+        elif "**" in p:
+            pdf.set_font(pdf.main_font, "B", 11)
+            safe_multicell(pdf, page_width, 5.5, p.replace("**", ""), new_x="LMARGIN", new_y="NEXT")
+        else:
+            pdf.set_font(pdf.main_font, "", 11)
+            safe_multicell(pdf, page_width, 5.5, p, new_x="LMARGIN", new_y="NEXT")
+
+    pdf.output(output_path)
+    return output_path
+
 # ---------- EXTRAÇÃO DE TEXTO DO PDF ----------
 def extract_text_from_pdf(file_path: str) -> str:
     doc = fitz.open(file_path)
@@ -668,6 +723,50 @@ MEU CURRÍCULO COMPLETO:
             # ---- 6. GERAÇÃO DO PDF ----
             await generate_pdf_with_timeout(vaga_alvo, score_final, s_tech, s_senior, s_nlp, penalidade, resposta_auditoria, output_pdf)
 
+            # ---- 7. REESCRITA CUSTOMIZADA (NOVO MÓDULO) ----
+            output_cv_pdf = str(TMP_DIR / f"cv_{run_id}.pdf")
+            prompt_reescrita = f"""
+Atue como um Especialista Sênior em Otimização de Currículos e ATS.
+Você tem em mãos o Currículo Original do candidato, a Descrição da Vaga Alvo e a Auditoria Técnica de Matching que acabou de ser realizada.
+
+SUA MISSÃO:
+Gere o CURRÍCULO CUSTOMIZADO COMPLETO E PRONTO para o candidato enviar para esta vaga específica.
+O currículo deve incorporar todas as sugestões de otimização identificadas na auditoria, empregar as palavras-chave prioritárias da vaga de forma natural e apresentar uma linguagem objetiva, focada em realizações mensuráveis e 100% amigável para sistemas ATS.
+
+REGRAS ESTRUTURAIS:
+- Retenha o histórico real do candidato sem inventar empresas, cargos ou formações inexistentes.
+- Modele o Resumo Executivo, o Título Profissional e os Bullets de Experiência para refletir máxima aderência com as exigências da vaga.
+- Apresente o currículo final limpo e bem estruturado em Markdown (utilize # para seções principais, - para bullets).
+- Retorne EXCLUSIVAMENTE o conteúdo do currículo customizado, sem introduções ou explicações adicionais.
+
+VAGA ALVO: {vaga_alvo}
+DESCRIÇÃO DA VAGA: {descricao_vaga[:15000]}
+
+AUDITORIA DE MATCHING (GAPS E SUGESTÕES):
+{resposta_auditoria[:15000]}
+
+CURRÍCULO ORIGINAL DO CANDIDATO:
+{cv_text_raw[:30000]}
+""".strip()
+
+            comp_reescrita, reescrita_err = await timed_call(
+                "reescrita_customizada",
+                client.chat.completions.create(
+                    model=DEEPSEEK_MODELS[0],
+                    messages=[{"role": "user", "content": prompt_reescrita}],
+                    temperature=0.2,
+                    max_tokens=4096,
+                ),
+                settings.TIMEOUT_AUDIT,
+                fallback=None,
+            )
+            if comp_reescrita and hasattr(comp_reescrita, "choices"):
+                reescrita_cv = sanitize_text(comp_reescrita.choices[0].message.content)
+            else:
+                reescrita_cv = cv_otimizado_texto
+
+            await asyncio.wait_for(asyncio.to_thread(generate_cv_pdf, vaga_alvo, reescrita_cv, output_cv_pdf), timeout=settings.TIMEOUT_PDF)
+
             logger.info(f"pipeline done run_id={run_id} elapsed={time.time()-t0:.2f}s")
 
             result_data = {
@@ -679,10 +778,13 @@ MEU CURRÍCULO COMPLETO:
                 "penalidade": penalidade,
                 "analise_texto": resposta_auditoria,
                 "output_pdf": output_pdf,
+                "reescrita_cv": reescrita_cv,
+                "output_cv_pdf": output_cv_pdf,
                 "audit_model_used": audit_model_used,
                 "fallbacks": {
                     "optimization": opt_err is not None,
                     "audit": audit_err is not None,
+                    "reescrita": reescrita_err is not None,
                 },
             }
             save_run_db(run_id, status="success", result=result_data)
@@ -802,17 +904,19 @@ async def get_status(run_id: str):
             "status": "success",
             "run_id": run_id,
             "download_url": f"/api/result/{run_id}",
+            "download_cv_url": f"/api/result/cv/{run_id}",
             "vaga_alvo": run_data["vaga_alvo"],
             "score_final": run_data["score_final"],
             "s_tech": run_data["s_tech"],
             "s_senior": run_data["s_senior"],
             "s_nlp": run_data["s_nlp"],
             "penalidade": run_data["penalidade"],
-            "headline": run_data["headline"],
-            "detail": run_data["detail"],
+            "headline": run_data.get("headline", ""),
+            "detail": run_data.get("detail", "Análise concluída com sucesso."),
             "fallbacks": run_data.get("fallbacks", {}),
-            "audit_model_used": run_data["audit_model_used"],
-            "analise_texto": run_data["analise_texto"],
+            "audit_model_used": run_data.get("audit_model_used", "none"),
+            "analise_texto": run_data.get("analise_texto", ""),
+            "reescrita_cv": run_data.get("reescrita_cv", ""),
         })
 
 @app.get("/api/result/{run_id}")
@@ -825,3 +929,15 @@ async def download_result(run_id: str):
     if not os.path.exists(pdf_path):
         raise HTTPException(status_code=404, detail="Arquivo PDF não encontrado.")
     return FileResponse(path=pdf_path, media_type="application/pdf", filename="diagnostico_ats.pdf")
+
+@app.get("/api/result/cv/{run_id}")
+async def download_cv_result(run_id: str):
+    cleanup_expired_runs()
+    item = get_run_db(run_id)
+    if not item or item["status"] != "success":
+        raise HTTPException(status_code=404, detail="Resultado não encontrado ou expirado.")
+    pdf_path = item.get("output_cv_pdf")
+    if not pdf_path or not os.path.exists(pdf_path):
+        raise HTTPException(status_code=404, detail="Arquivo PDF do currículo customizado não encontrado.")
+    return FileResponse(path=pdf_path, media_type="application/pdf", filename="curriculo_otimizado_ats.pdf")
+

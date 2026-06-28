@@ -2,6 +2,7 @@
 lucide.createIcons();
 
 let lastDownloadUrl = null;
+let lastDownloadCvUrl = null;
 
 // Dropzone logic
 const dropzone = document.getElementById('dropzone');
@@ -10,6 +11,7 @@ const fileInfo = document.getElementById('fileInfo');
 const fileName = document.getElementById('fileName');
 const fileError = document.getElementById('fileError');
 const redownloadBtn = document.getElementById('redownloadBtn');
+const redownloadCvBtn = document.getElementById('redownloadCvBtn');
 
 dropzone.addEventListener('click', () => fileInput.click());
 
@@ -188,6 +190,15 @@ function setAuditText(text) {
   }
 }
 
+function setCustomCvText(text) {
+  const container = document.getElementById('customCvText');
+  if (!text) {
+    container.textContent = 'Aguardando o processamento do currículo para exibir a versão customizada pronta para envio.';
+  } else {
+    container.innerHTML = renderMarkdown(text);
+  }
+}
+
 function showOverlay(show) {
   document.getElementById('overlay').classList.toggle('hidden', !show);
 }
@@ -202,6 +213,17 @@ redownloadBtn.addEventListener('click', () => {
     const a = document.createElement('a');
     a.href = lastDownloadUrl;
     a.download = 'diagnostico_ats.pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+});
+
+redownloadCvBtn.addEventListener('click', () => {
+  if (lastDownloadCvUrl) {
+    const a = document.createElement('a');
+    a.href = lastDownloadCvUrl;
+    a.download = 'curriculo_otimizado_ats.pdf';
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -223,10 +245,12 @@ document.getElementById('atsForm').addEventListener('submit', async (e) => {
   submitBtn.disabled = true;
   submitBtn.classList.add('loading');
   redownloadBtn.classList.add('hidden');
+  redownloadCvBtn.classList.add('hidden');
   showOverlay(true);
   setStatus('Processando análise em background...', 'loading');
-  setResult(null, 'Processando a solicitação.', 'O sistema está executando a análise neural.', 'neutral');
+  setResult(null, 'Processando a solicitação.', 'O sistema está executando a análise neural e gerando o currículo customizado.', 'neutral');
   setAuditText(null);
+  setCustomCvText(null);
   updateProgress(1, 25, 'Extração de texto do PDF');
 
   try {
@@ -259,6 +283,8 @@ document.getElementById('atsForm').addEventListener('submit', async (e) => {
         updateProgress(2, 50, 'Otimização do currículo e modelagem de similaridade semântica');
       } else if (attempts === 5) {
         updateProgress(3, 75, 'Auditoria neural avançada com modelos DeepSeek');
+      } else if (attempts === 8) {
+        updateProgress(3, 85, 'Gerando Reescrita Customizada do Currículo com DeepSeek v4 Pro');
       }
 
       const pollRes = await fetch(statusUrl);
@@ -280,7 +306,9 @@ document.getElementById('atsForm').addEventListener('submit', async (e) => {
 
     const data = successData;
     lastDownloadUrl = data.download_url;
+    lastDownloadCvUrl = data.download_cv_url;
     redownloadBtn.classList.remove('hidden');
+    redownloadCvBtn.classList.remove('hidden');
 
     setStatus(data.detail, 'success');
     setResult(
@@ -303,6 +331,12 @@ document.getElementById('atsForm').addEventListener('submit', async (e) => {
       setAuditText('Diagnóstico neural concluído. Veja os detalhes e a recomendação no PDF do relatório executivo.');
     }
 
+    if (data.reescrita_cv) {
+      setCustomCvText(data.reescrita_cv);
+    } else {
+      setCustomCvText('O currículo customizado foi gerado. Use o botão no topo para baixar o PDF.');
+    }
+
     const pdfRes = await fetch(data.download_url);
     if (!pdfRes.ok) throw new Error('Análise concluída, mas não foi possível baixar o PDF.');
 
@@ -319,9 +353,11 @@ document.getElementById('atsForm').addEventListener('submit', async (e) => {
     setStatus(err.message || 'Falha inesperada no processamento.', 'error');
     setResult('--', 'Falha na análise.', err.message || 'Não foi possível gerar o relatório.', 'error');
     setAuditText('Ocorreu um erro no processamento do seu PDF. Detalhes: ' + (err.message || 'Erro de comunicação com o servidor neural.'));
+    setCustomCvText('Falha na geração do currículo customizado.');
   } finally {
     submitBtn.disabled = false;
     submitBtn.classList.remove('loading');
     showOverlay(false);
   }
 });
+

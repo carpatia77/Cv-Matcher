@@ -85,9 +85,13 @@
             <h2>Resultado Consolidado</h2>
           </div>
           <div class="header-actions">
-            <button id="redownloadBtn" class="btn-secondary hidden" aria-label="Baixar PDF novamente">
+            <button id="redownloadBtn" class="btn-secondary hidden" aria-label="Baixar PDF do Diagnóstico">
               <i data-lucide="download" style="width: 15px; height: 15px;"></i>
-              <span>Baixar PDF</span>
+              <span>Baixar Diagnóstico</span>
+            </button>
+            <button id="redownloadCvBtn" class="btn-secondary hidden" aria-label="Baixar PDF do Currículo Customizado" style="background-color: var(--cta); color: white; border-color: var(--cta);">
+              <i data-lucide="file-check" style="width: 15px; height: 15px;"></i>
+              <span>Baixar Currículo Customizado</span>
             </button>
             <span id="resultPill" class="status-pill" aria-live="polite">
               <i data-lucide="clock" style="width: 12px; height: 12px;"></i>
@@ -165,6 +169,17 @@
           </div>
           <div id="auditText" class="audit-text" aria-live="polite">
             Aguardando o processamento do currículo para exibir o parecer executivo, análise de riscos e gaps técnicos.
+          </div>
+        </div>
+
+        <!-- Custom Rewritten CV Section -->
+        <div class="audit-report-container" style="margin-top: 24px;">
+          <div class="audit-title" style="color: var(--cta);">
+            <i data-lucide="file-check" style="width: 16px; height: 16px; color: var(--cta);"></i>
+            Currículo Customizado (Otimizado para a Vaga)
+          </div>
+          <div id="customCvText" class="audit-text" aria-live="polite">
+            Aguardando o processamento do currículo para exibir a versão customizada pronta para envio.
           </div>
         </div>
       </article>
