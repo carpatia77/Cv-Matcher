@@ -1,0 +1,13 @@
+[Unit]
+Description=Uvicorn daemon para o CV-Matcher
+After=network.target
+
+[Service]
+User=opc
+Group=opc
+WorkingDirectory=/home/opc/Cv-Matcher
+ExecStart=/home/opc/Cv-Matcher/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8055 --workers 2
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATS Predictor Neural | Otimização Avançada de Currículos</title>
+    <meta name="description" content="Otimize seu currículo com Inteligência Artificial. Auditoria e reescrita customizada focada em sistemas ATS (Applicant Tracking System) para maximizar suas chances de entrevista.">
+    <link rel="icon" href="https://cv-matcher.duckdns.org/static/favicon.ico" type="image/x-icon">
+    
+    <style>
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #0f172a; color: #f8fafc;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+        }
+
+        /* Container do Launcher Premium */
+        .portal-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+        }
+
+        .portal-box {
+            max-width: 650px;
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            padding: 40px;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .portal-box h1 {
+            margin-top: 0;
+            font-size: 2.2rem;
+            background: linear-gradient(to right, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 15px;
+        }
+
+        .portal-box p {
+            font-size: 1.15rem;
+            line-height: 1.6;
+            color: #cbd5e1;
+            margin-bottom: 35px;
+        }
+
+        .btn-launch {
+            display: inline-block;
+            background: linear-gradient(to right, #0284c7, #4f46e5);
+            color: #ffffff;
+            padding: 18px 40px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            text-decoration: none;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-launch:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 20px 35px -5px rgba(79, 70, 229, 0.8);
+            background: linear-gradient(to right, #0369a1, #4338ca);
+        }
+
+        /* Estilização do iframe gerado dinamicamente */
+        #appFrame {
+            width: 100%; height: 100%; border: none; display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Iframe em tela cheia apontando para o endpoint oficial do DuckDNS no Nginx -->
+    <iframe id="appFrame" title="ATS Predictor Neural" allow="fullscreen; clipboard-read; clipboard-write; downloads"></iframe>
+
+    <!-- Launcher Executivo Exibido com Maestria para o Visitante -->
+    <div id="portalScreen" class="portal-container">
+        <div class="portal-box">
+            <h1>🛡️ ATS Predictor Neural</h1>
+            <p>Auditoria e Otimização Inteligente de Currículos com <strong>Llama 3.3 70B</strong>. Infraestrutura 100% protegida na nuvem da Oracle.</p>
+            
+            <div style="margin: 35px 0; display: flex; justify-content: center;">
+                <a id="mainAccessBtn" href="http://cv-matcher.duckdns.org/" target="_blank" class="btn-launch" style="width: 85%;">🚀 Iniciar Painel Neural</a>
+            </div>
+
+            <p style="margin-top: 15px; font-size: 0.9rem; color: #64748b;">(Infraestrutura de alta disponibilidade via DuckDNS e Nginx)</p>
+        </div>
+    </div>
+
+    <script>
+        // ENDPOINT OFICIAL DO DUCKDNS (Porta 80 limpa no Nginx da Oracle Cloud)
+        const DUCKDNS_OFFICIAL_URL = "http://cv-matcher.duckdns.org/";
+
+        document.getElementById('mainAccessBtn').href = DUCKDNS_OFFICIAL_URL;
+
+        // Carregamento limpo via DuckDNS sem exibir IP
+        setTimeout(() => {
+            const frame = document.getElementById('appFrame');
+            frame.src = DUCKDNS_OFFICIAL_URL;
+            frame.style.display = "block";
+            document.getElementById('portalScreen').style.display = "none";
+        }, 1200);
+    </script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATS Predictor Neural | Otimização Avançada de Currículos</title>
+    <meta name="description" content="Otimize seu currículo com Inteligência Artificial. Auditoria e reescrita customizada focada em sistemas ATS (Applicant Tracking System) para maximizar suas chances de entrevista.">
+    <link rel="icon" href="https://cv-matcher.duckdns.org/static/favicon.ico" type="image/x-icon">
+    
+    <style>
+        /* Reset total para garantir que o iframe ocupe 100% da tela sem margens ou barras extras */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0f172a; /* Cor de fundo escura combinando com o tema premium do app */
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+
+        /* Estilização do iframe em tela cheia (Fullscreen) */
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+
+        /* Mensagem de fallback para navegadores muito antigos ou problemas de conectividade */
+        .no-iframe {
+            display: none;
+            color: #f8fafc;
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        /* Se o iframe não carregar, mostra a mensagem */
+        iframe:not(:root) ~ .no-iframe {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 
+      Iframe apontando para o backend seguro no DuckDNS/Oracle VM.
+      Atributo 'allow' configurado para garantir funcionamento de downloads, scripts e formulários.
+    -->
+    <iframe 
+        src="https://cv-matcher.duckdns.org/" 
+        title="ATS Predictor Neural"
+        allow="fullscreen; clipboard-read; clipboard-write; downloads"
+        loading="eager">
+    </iframe>
+
+    <div class="no-iframe">
+        <h2>Seu navegador não suporta iframes ou a conexão direta é necessária.</h2>
+        <p>Acesse o aplicativo diretamente através do link oficial:</p>
+        <a href="https://cv-matcher.duckdns.org/" style="color: #38bdf8; text-decoration: underline; font-size: 1.2rem;">
+            https://cv-matcher.duckdns.org/
+        </a>
+    </div>
+
+</body>
+</html>
