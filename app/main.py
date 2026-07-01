@@ -33,11 +33,14 @@ TEMPLATES_DIR = APP_DIR / "templates"
 STATIC_DIR = APP_DIR / "static"
 TMP_DIR = BASE_DIR / "tmp"
 
-# Usando o Llama 3.3 70B como modelo principal e de fallback devido aos timeouts na API DeepSeek da NVIDIA
-DEEPSEEK_MODELS = [
-    "meta/llama-3.3-70b-instruct",
+# Cadeia de Modelos para Roteamento Inteligente (LLM Routing / Fallback Chain)
+# Usa os melhores LLMs disponíveis na NVIDIA NIM, caindo para modelos mais leves caso haja gargalos
+LLM_ROUTING_CHAIN = [
+    "nvidia/llama-3.1-nemotron-70b-instruct", # Modelo super alinhado da NVIDIA para instruções complexas e ATS (Ouro)
+    "meta/llama-3.3-70b-instruct",            # SOTA open-source (Prata)
+    "mistralai/mistral-large-2-instruct",     # Alternativa fantástica de raciocínio lógico (Bronze)
+    "meta/llama-3.1-8b-instruct"              # Leve e ultra-rápido, fallback à prova de falhas (Ferro)
 ]
-FALLBACK_AUDIT_MODEL = "meta/llama-3.3-70b-instruct"
 
 # Limiter para rate limit
 limiter = Limiter(key_func=get_remote_address)
@@ -352,62 +355,40 @@ async def calcular_similaridade_semantica(texto1: str, texto2: str, cliente_api:
     logger.debug(f"embedding all models failed, returning fallback 50.0. last_err={repr(last_err)}")
     return 50.0
 
-# ---------- AUDITORIA COM FALLBACK ----------
-async def run_audit_with_fallback(client: AsyncOpenAI, prompt_auditoria: str, fallback_audit: str):
-    for model_name in DEEPSEEK_MODELS:
-        logger.debug(f"audit trying model={model_name} with timeout={settings.TIMEOUT_AUDIT}s")
+# ---------- ROTEAMENTO INTELIGENTE (LLM ROUTING & FALLBACK) ----------
+async def run_llm_with_fallback(client: AsyncOpenAI, prompt: str, task_name: str, timeout: float, max_tokens: int, temperature: float = 0.2, fallback_content: str = ""):
+    for model_name in LLM_ROUTING_CHAIN:
+        logger.debug(f"{task_name} trying model={model_name} with timeout={timeout}s")
         try:
-            comp_auditoria, audit_err = await timed_call(
-                f"audit-{model_name}",
+            response, err = await timed_call(
+                f"{task_name}-{model_name}",
                 client.chat.completions.create(
                     model=model_name,
-                    messages=[{"role": "user", "content": prompt_auditoria}],
-                    temperature=0.1,
-                    max_tokens=settings.AUDIT_MAX_TOKENS,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=temperature,
+                    max_tokens=max_tokens,
                 ),
-                timeout_s=settings.TIMEOUT_AUDIT,
+                timeout_s=timeout,
                 fallback=None,
             )
-            if comp_auditoria and hasattr(comp_auditoria, "choices"):
-                raw_audit = comp_auditoria.choices[0].message.content or ""
-                logger.debug(f"audit model={model_name} raw response length={len(raw_audit)}")
-                if raw_audit.strip():
-                    logger.debug(f"audit SUCCESS with model={model_name}")
-                    return sanitize_text(raw_audit), None, model_name
+            if response and hasattr(response, "choices"):
+                content = response.choices[0].message.content or ""
+                if content.strip():
+                    logger.debug(f"{task_name} SUCCESS with model={model_name}")
+                    return sanitize_text(content), None, model_name
                 else:
-                    logger.debug(f"audit model={model_name} returned EMPTY response")
+                    logger.debug(f"{task_name} model={model_name} returned EMPTY response")
             else:
-                logger.debug(f"audit model={model_name} failed: audit_err={audit_err}")
+                logger.debug(f"{task_name} model={model_name} failed: err={err}")
         except asyncio.TimeoutError:
-            logger.warning(f"audit model={model_name} TIMEOUT after {settings.TIMEOUT_AUDIT}s")
+            logger.warning(f"{task_name} model={model_name} TIMEOUT after {timeout}s")
         except Exception as e:
-            logger.error(f"audit model={model_name} exception: {type(e).__name__}: {repr(e)}")
+            logger.error(f"{task_name} model={model_name} exception: {type(e).__name__}: {repr(e)}")
             if "rate_limit" in str(e).lower():
                 await asyncio.sleep(5)
 
-    logger.debug(f"audit all DeepSeek failed, trying fallback model={FALLBACK_AUDIT_MODEL}")
-    try:
-        comp_auditoria, audit_err = await timed_call(
-            "audit-fallback",
-            client.chat.completions.create(
-                model=FALLBACK_AUDIT_MODEL,
-                messages=[{"role": "user", "content": prompt_auditoria}],
-                temperature=0.1,
-                max_tokens=settings.AUDIT_MAX_TOKENS + 500,
-            ),
-            timeout_s=settings.TIMEOUT_AUDIT + 30,
-            fallback=None,
-        )
-        if comp_auditoria and hasattr(comp_auditoria, "choices"):
-            raw_audit = comp_auditoria.choices[0].message.content or ""
-            if raw_audit.strip():
-                logger.debug(f"audit SUCCESS with fallback model={FALLBACK_AUDIT_MODEL}")
-                return sanitize_text(raw_audit), None, FALLBACK_AUDIT_MODEL
-    except Exception as e:
-        logger.error(f"audit fallback exception: {type(e).__name__}: {repr(e)}")
-
-    logger.debug("audit ALL models failed, returning hardcoded fallback")
-    return fallback_audit, RuntimeError("Todos os modelos de auditoria falharam"), "none"
+    logger.debug(f"{task_name} ALL models failed, returning hardcoded fallback")
+    return fallback_content, RuntimeError(f"Todos os modelos falharam para a task {task_name}"), "none"
 
 # ---------- PIPELINE ASSÍNCRONO ----------
 async def generate_pdf_with_timeout(*args, **kwargs):
@@ -439,24 +420,15 @@ Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simple
 """.strip()
 
             fallback_cv = sanitize_text(cv_text_raw)[:3500]
-            comp_otimizacao, opt_err = await timed_call(
-                "optimization",
-                client.chat.completions.create(
-                    model="meta/llama-3.3-70b-instruct",
-                    messages=[{"role": "user", "content": prompt_otimizacao}],
-                    temperature=0.2,
-                    max_tokens=2500,
-                ),
-                settings.TIMEOUT_OPTIMIZATION,
-                fallback=None,
+            resposta_otimizacao_bruta, opt_err, opt_model_used = await run_llm_with_fallback(
+                client, prompt_otimizacao, "optimization", settings.TIMEOUT_OPTIMIZATION, 2500, 0.2, fallback_cv
             )
 
-            if comp_otimizacao and hasattr(comp_otimizacao, "choices"):
-                resposta_otimizacao = sanitize_text(comp_otimizacao.choices[0].message.content)
+            if not opt_err:
                 cv_otimizado_texto = (
-                    resposta_otimizacao.split(DELIMITADOR_CV, 1)[1].strip()
-                    if DELIMITADOR_CV in resposta_otimizacao
-                    else resposta_otimizacao.strip()
+                    resposta_otimizacao_bruta.split(DELIMITADOR_CV, 1)[1].strip()
+                    if DELIMITADOR_CV in resposta_otimizacao_bruta
+                    else resposta_otimizacao_bruta.strip()
                 )
             else:
                 cv_otimizado_texto = fallback_cv
@@ -705,8 +677,8 @@ MEU CURRÍCULO COMPLETO:
 - Revise manualmente o currículo e a descrição da vaga.
 """
 
-            resposta_auditoria, audit_err, audit_model_used = await run_audit_with_fallback(
-                client, prompt_auditoria, fallback_audit
+            resposta_auditoria, audit_err, audit_model_used = await run_llm_with_fallback(
+                client, prompt_auditoria, "audit", settings.TIMEOUT_AUDIT, settings.AUDIT_MAX_TOKENS, 0.1, fallback_audit
             )
             logger.debug(f"audit final model_used={audit_model_used} has_error={audit_err is not None}")
 
@@ -748,21 +720,9 @@ CURRÍCULO ORIGINAL DO CANDIDATO:
 {cv_text_raw[:30000]}
 """.strip()
 
-            comp_reescrita, reescrita_err = await timed_call(
-                "reescrita_customizada",
-                client.chat.completions.create(
-                    model=DEEPSEEK_MODELS[0],
-                    messages=[{"role": "user", "content": prompt_reescrita}],
-                    temperature=0.2,
-                    max_tokens=4096,
-                ),
-                settings.TIMEOUT_AUDIT,
-                fallback=None,
+            reescrita_cv, reescrita_err, reescrita_model_used = await run_llm_with_fallback(
+                client, prompt_reescrita, "reescrita_customizada", settings.TIMEOUT_AUDIT, 4096, 0.2, cv_otimizado_texto
             )
-            if comp_reescrita and hasattr(comp_reescrita, "choices"):
-                reescrita_cv = sanitize_text(comp_reescrita.choices[0].message.content)
-            else:
-                reescrita_cv = cv_otimizado_texto
 
             await asyncio.wait_for(asyncio.to_thread(generate_cv_pdf, vaga_alvo, reescrita_cv, output_cv_pdf), timeout=settings.TIMEOUT_PDF)
 
