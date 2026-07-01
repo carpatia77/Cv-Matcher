@@ -36,10 +36,10 @@ TMP_DIR = BASE_DIR / "tmp"
 # Cadeia de Modelos para Roteamento Inteligente (LLM Routing / Fallback Chain)
 # Usa os melhores LLMs disponíveis na NVIDIA NIM, caindo para modelos mais leves caso haja gargalos
 LLM_ROUTING_CHAIN = [
-    "nvidia/llama-3.1-nemotron-70b-instruct", # Modelo super alinhado da NVIDIA para instruções complexas e ATS (Ouro)
-    "meta/llama-3.3-70b-instruct",            # SOTA open-source (Prata)
-    "mistralai/mistral-large-2-instruct",     # Alternativa fantástica de raciocínio lógico (Bronze)
-    "meta/llama-3.1-8b-instruct"              # Leve e ultra-rápido, fallback à prova de falhas (Ferro)
+    "meta/llama-3.1-8b-instruct",             # Modelo validado: Ultrarrápido e 100% funcional na conta atual (Ouro)
+    "meta/llama-3.1-70b-instruct",            # Fallback opcional da geração 3.1 (Prata)
+    "nvidia/llama-3.1-nemotron-70b-instruct", # Pendente de liberação de permissão 404 (Bronze)
+    "meta/llama-3.3-70b-instruct"             # Histórico de timeout severo na NVIDIA (Ferro)
 ]
 
 # Limiter para rate limit
