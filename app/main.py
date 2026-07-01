@@ -705,6 +705,7 @@ Gere o CURRÍCULO CUSTOMIZADO COMPLETO E PRONTO para o candidato enviar para est
 O currículo deve incorporar todas as sugestões de otimização identificadas na auditoria, empregar as palavras-chave prioritárias da vaga de forma natural e apresentar uma linguagem objetiva, focada em realizações mensuráveis e 100% amigável para sistemas ATS.
 
 REGRAS ESTRUTURAIS:
+- OBRIGATÓRIO: O cabeçalho do currículo deve conter NOME COMPLETO e todos os DADOS DE CONTATO (E-mail, Telefone, LinkedIn, Localização) extraídos fielmente do currículo original.
 - Retenha o histórico real do candidato sem inventar empresas, cargos ou formações inexistentes.
 - Modele o Resumo Executivo, o Título Profissional e os Bullets de Experiência para refletir máxima aderência com as exigências da vaga.
 - Apresente o currículo final limpo e bem estruturado em Markdown (utilize # para seções principais, - para bullets).
