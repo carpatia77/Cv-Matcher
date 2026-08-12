@@ -51,6 +51,12 @@ def init_db():
                 call_count INTEGER DEFAULT 0
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS global_calls (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp REAL NOT NULL
+            )
+        """)
         try:
             conn.execute("ALTER TABLE runs ADD COLUMN reescrita_cv TEXT")
             conn.execute("ALTER TABLE runs ADD COLUMN output_cv_pdf TEXT")
@@ -158,6 +164,24 @@ def get_daily_call_count() -> int:
         cur = conn.execute("SELECT call_count FROM daily_metrics WHERE date = ?", (today,))
         row = cur.fetchone()
         return row[0] if row else 0
+
+def record_global_call() -> None:
+    import time
+    now = time.time()
+    cutoff = now - 300.0  # Limpar registros antigos com mais de 5 minutos
+    with get_db() as conn:
+        conn.execute("INSERT INTO global_calls (timestamp) VALUES (?)", (now,))
+        conn.execute("DELETE FROM global_calls WHERE timestamp < ?", (cutoff,))
+        conn.commit()
+
+def count_recent_global_calls(window_seconds: float = 60.0) -> int:
+    import time
+    cutoff = time.time() - window_seconds
+    with get_db() as conn:
+        cur = conn.execute("SELECT COUNT(id) FROM global_calls WHERE timestamp >= ?", (cutoff,))
+        row = cur.fetchone()
+        return row[0] if row else 0
+
 
 
 

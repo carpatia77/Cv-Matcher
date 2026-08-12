@@ -25,11 +25,13 @@ from slowapi.util import get_remote_address
 from app.config import BASE_DIR, settings
 from app.database import (
     cleanup_expired_runs,
+    count_recent_global_calls,
     get_daily_call_count,
     get_run_db,
     increment_daily_calls,
     init_db,
     load_jobs_db,
+    record_global_call,
     save_run_db,
 )
 from app.logger import logger
@@ -292,9 +294,6 @@ async def extract_text_with_timeout(file_path: str):
     return await asyncio.wait_for(asyncio.to_thread(extract_text_from_pdf, file_path), timeout=settings.TIMEOUT_EXTRACTION)
 
 # ---------- RATE LIMIT GLOBAL E CIRCUIT BREAKER DE CUSTO ----------
-GLOBAL_CALL_TIMESTAMPS: list[float] = []
-_global_rate_lock = asyncio.Lock()
-
 async def check_global_rate_limits():
     # 1. Circuit Breaker Diário (Teto diário de chamadas persistido no SQLite)
     daily_count = get_daily_call_count()
@@ -304,20 +303,15 @@ async def check_global_rate_limits():
             detail="Limite diário de análises atingido. Tente novamente amanhã."
         )
 
-    # 2. Rate Limit Global de 5/minuto (teto agregado de todos os visitantes)
-    now = time.time()
-    async with _global_rate_lock:
-        cutoff = now - 60.0
-        while GLOBAL_CALL_TIMESTAMPS and GLOBAL_CALL_TIMESTAMPS[0] < cutoff:
-            GLOBAL_CALL_TIMESTAMPS.pop(0)
+    # 2. Rate Limit Global de 5/minuto (teto agregado compartilhado via SQLite entre workers)
+    recent_calls = count_recent_global_calls(60.0)
+    if recent_calls >= settings.GLOBAL_LLM_CALLS_PER_MINUTE:
+        raise HTTPException(
+            status_code=503,
+            detail="Limite global de análises por minuto atingido. Tente novamente em instantes."
+        )
 
-        if len(GLOBAL_CALL_TIMESTAMPS) >= settings.GLOBAL_LLM_CALLS_PER_MINUTE:
-            raise HTTPException(
-                status_code=503,
-                detail="Limite global de análises por minuto atingido. Tente novamente em instantes."
-            )
-        GLOBAL_CALL_TIMESTAMPS.append(now)
-
+    record_global_call()
     increment_daily_calls()
 
 # ---------- VALIDAÇÃO ANTI-BOT (CLOUDFLARE TURNSTILE) ----------
