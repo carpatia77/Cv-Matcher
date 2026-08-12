@@ -61,8 +61,8 @@ app.add_middleware(
     allow_origins=[
         "https://blackpill.unaux.com",
         "https://cv-matcher.duckdns.org:8443",
-        "http://localhost:8055",
-        "http://127.0.0.1:8055",
+        # Loopback apenas em desenvolvimento local
+        *(["http://localhost:8055", "http://127.0.0.1:8055"] if settings.APP_ENV in ("development", "dev") else []),
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],

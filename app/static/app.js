@@ -186,9 +186,11 @@ function setAuditText(text) {
   const container = document.getElementById('auditText');
   if (!text) {
     container.textContent = 'Aguardando o processamento do currículo para exibir o parecer executivo, análise de riscos e gaps técnicos.';
+  } else if (typeof DOMPurify !== 'undefined') {
+    container.innerHTML = DOMPurify.sanitize(renderMarkdown(text));
   } else {
-    const rawHtml = renderMarkdown(text);
-    container.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(rawHtml) : rawHtml;
+    // Fail-closed: se DOMPurify não carregar, exibe texto puro — sem HTML, sem XSS
+    container.textContent = text;
   }
 }
 
@@ -196,9 +198,11 @@ function setCustomCvText(text) {
   const container = document.getElementById('customCvText');
   if (!text) {
     container.textContent = 'Aguardando o processamento do currículo para exibir a versão customizada pronta para envio.';
+  } else if (typeof DOMPurify !== 'undefined') {
+    container.innerHTML = DOMPurify.sanitize(renderMarkdown(text));
   } else {
-    const rawHtml = renderMarkdown(text);
-    container.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(rawHtml) : rawHtml;
+    // Fail-closed: se DOMPurify não carregar, exibe texto puro — sem HTML, sem XSS
+    container.textContent = text;
   }
 }
 
