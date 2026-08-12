@@ -76,13 +76,27 @@ curl -s https://cv-matcher.duckdns.org:8443/api/health -H "X-Forwarded-For: 1.2.
 
 | # | Ação | Esforço |
 |---|---|---|
-| 2.1 | Circuit breaker de orçamento diário de chamadas à NVIDIA | ~4h |
+| 2.1 | Rate limit global de 5/min (teto agregado, não só por IP) + circuit breaker diário | ~4h |
 | 2.2 | Delimitação anti-prompt-injection nos prompts do LLM | ~2h |
 | 2.3 | Backup automatizado do SQLite (cron + retenção) | ~1h |
 
-### 2.1 — Circuit breaker de custo
+### 2.1 — Rate limit global + circuit breaker de custo
+
+**Contexto:** a conta NVIDIA deste projeto tem um teto real de **40 requisições/minuto**. O rate limit
+atual do `slowapi` (5/min) é aplicado **por IP**, o que não impede que múltiplos IPs somados estourem o
+limite da conta inteira mesmo cada um respeitando os 5/min individualmente. Definido com o usuário: o
+teto global agregado deste projeto deve ser **5/min no total**, não uma fração dos 40/min disponíveis —
+margem generosa para não estourar a conta mesmo sob rajadas.
 
 ```python
+# Contador global de chamadas à NVIDIA na janela de 1 minuto (independente de IP)
+GLOBAL_LLM_CALLS_PER_MINUTE = 5
+
+async def check_global_rate_limit():
+    count = get_calls_in_last_minute()
+    if count >= settings.GLOBAL_LLM_CALLS_PER_MINUTE:
+        raise HTTPException(status_code=503, detail="Limite global de análises por minuto atingido. Tente novamente em instantes.")
+
 async def check_daily_budget():
     count = get_daily_call_count()
     if count >= settings.MAX_DAILY_LLM_CALLS:
@@ -140,7 +154,7 @@ Não implementar preventivamente — reavaliar com métricas reais de abuso/trá
 | 4 | `pip-audit` no CI | 20min | CVEs em dependências |
 | 5 | `--proxy-headers` no uvicorn | 15min | Rate limit e Turnstile cegos |
 | 6 | Corrigir chave NVIDIA exposta | 5min | Credencial vazada no histórico público |
-| 7 | Circuit breaker diário | 4h | Abuso lento/distribuído |
+| 7 | Rate limit global 5/min + circuit breaker diário | 4h | Estouro da conta NVIDIA (40 rpm) e abuso distribuído |
 | 8 | Delimitação anti-injection | 2h | Prompt injection |
 | 9 | Backup SQLite | 1h | Perda de dados |
 
