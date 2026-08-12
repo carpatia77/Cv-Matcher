@@ -6,3 +6,6 @@ output/
 *.pdf
 .vscode/
 .DS_Store
+data/*.db
+data/*.db-journal
+backups/
