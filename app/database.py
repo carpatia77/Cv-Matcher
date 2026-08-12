@@ -57,6 +57,15 @@ def init_db():
                 timestamp REAL NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS injection_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ip TEXT NOT NULL,
+                run_id TEXT,
+                source TEXT,
+                timestamp REAL NOT NULL
+            )
+        """)
         try:
             conn.execute("ALTER TABLE runs ADD COLUMN reescrita_cv TEXT")
             conn.execute("ALTER TABLE runs ADD COLUMN output_cv_pdf TEXT")
@@ -182,7 +191,26 @@ def check_and_record_global_call(max_calls: int = 5, window_seconds: float = 60.
         conn.commit()
         return True
 
+def record_injection_attempt(ip: str, run_id: str | None = None, source: str = "unknown") -> None:
+    import time
+    now = time.time()
+    cleanup_cutoff = now - 86400.0  # mantém 24h de histórico
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO injection_attempts (ip, run_id, source, timestamp) VALUES (?, ?, ?, ?)",
+            (ip, run_id, source, now),
+        )
+        conn.execute("DELETE FROM injection_attempts WHERE timestamp < ?", (cleanup_cutoff,))
+        conn.commit()
 
-
-
+def count_recent_injection_attempts(ip: str, window_seconds: float = 3600.0) -> int:
+    import time
+    cutoff = time.time() - window_seconds
+    with get_db() as conn:
+        cur = conn.execute(
+            "SELECT COUNT(id) FROM injection_attempts WHERE ip = ? AND timestamp >= ?",
+            (ip, cutoff),
+        )
+        row = cur.fetchone()
+        return row[0] if row else 0
 
