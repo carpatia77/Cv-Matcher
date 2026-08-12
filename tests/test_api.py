@@ -34,20 +34,31 @@ def test_analyze_invalid_file(client):
     # Testar envio de arquivo não-PDF
     response = client.post(
         "/api/analyze",
-        data={"descricao_vaga": "FastAPI, Docker"},
+        data={"descricao_vaga": "FastAPI, Docker", "lgpd_consent": "true"},
         files={"cv_file": ("teste.txt", b"conteudo invalido", "text/plain")}
     )
     assert response.status_code == 400
     assert "PDF" in response.json()["detail"]
 
-def test_analyze_valid_pdf(client):
-    # Testar envio de arquivo PDF com magic bytes %PDF corretos
+def test_analyze_missing_lgpd_consent(client):
+    # Testar envio sem autorização LGPD
     response = client.post(
         "/api/analyze",
-        data={"descricao_vaga": "Engenheiro de IA, Python, PyTorch"},
+        data={"descricao_vaga": "FastAPI, Docker"},
+        files={"cv_file": ("curriculo.pdf", b"%PDF-1.4... conteudo simulado de pdf", "application/pdf")}
+    )
+    assert response.status_code == 400
+    assert "LGPD" in response.json()["detail"]
+
+def test_analyze_valid_pdf(client):
+    # Testar envio de arquivo PDF com magic bytes %PDF corretos e consentimento LGPD
+    response = client.post(
+        "/api/analyze",
+        data={"descricao_vaga": "Engenheiro de IA, Python, PyTorch", "lgpd_consent": "true"},
         files={"cv_file": ("curriculo.pdf", b"%PDF-1.4... conteudo simulado de pdf", "application/pdf")}
     )
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "processing"
     assert "run_id" in data
+

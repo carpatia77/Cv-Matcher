@@ -246,6 +246,12 @@ document.getElementById('atsForm').addEventListener('submit', async (e) => {
     return;
   }
 
+  const lgpdConsent = document.getElementById('lgpd_consent');
+  if (lgpdConsent && !lgpdConsent.checked) {
+    setStatus('Por favor, autorize o processamento dos dados (LGPD) para continuar.', 'error');
+    return;
+  }
+
   const submitBtn = document.getElementById('submitBtn');
   const formData = new FormData(e.target);
 

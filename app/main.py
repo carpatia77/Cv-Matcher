@@ -283,6 +283,32 @@ def extract_text_from_pdf(file_path: str) -> str:
 async def extract_text_with_timeout(file_path: str):
     return await asyncio.wait_for(asyncio.to_thread(extract_text_from_pdf, file_path), timeout=settings.TIMEOUT_EXTRACTION)
 
+# ---------- VALIDAÇÃO ANTI-BOT (CLOUDFLARE TURNSTILE) ----------
+async def verify_turnstile(token: str, remote_ip: str) -> bool:
+    if not settings.TURNSTILE_SECRET_KEY:
+        logger.debug("TURNSTILE_SECRET_KEY não configurada. Bypass da verificação Turnstile.")
+        return True
+    if not token:
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+                data={
+                    "secret": settings.TURNSTILE_SECRET_KEY,
+                    "response": token,
+                    "remoteip": remote_ip,
+                },
+            )
+            data = resp.json()
+            success = data.get("success", False)
+            if not success:
+                logger.warning(f"Turnstile verification failed: {data}")
+            return success
+    except Exception as e:
+        logger.error(f"Erro ao conectar com Cloudflare Turnstile: {e}")
+        return False
+
 # ---------- CLIENTE ASSÍNCRONO ----------
 async def get_async_client() -> AsyncOpenAI:
     if not settings.NVIDIA_API_KEY:
@@ -770,7 +796,11 @@ CURRÍCULO ORIGINAL DO CANDIDATO:
 # ---------- ENDPOINTS ----------
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    return templates.TemplateResponse(request=request, name="index.html", context={"app_env": settings.APP_ENV})
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"app_env": settings.APP_ENV, "turnstile_site_key": settings.TURNSTILE_SITE_KEY},
+    )
 
 @app.get("/api/health")
 async def health():
@@ -803,9 +833,18 @@ async def analyze(
     request: Request,
     background_tasks: BackgroundTasks,
     descricao_vaga: str = Form(...),
-    cv_file: UploadFile = File(...)
+    cv_file: UploadFile = File(...),
+    lgpd_consent: bool = Form(False),
+    cf_turnstile_response: str = Form(""),
 ):
     logger.info(f"analyze start filename={cv_file.filename}")
+    if not lgpd_consent:
+        raise HTTPException(status_code=400, detail="É necessário autorizar o processamento dos dados conforme a LGPD.")
+
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    if not await verify_turnstile(cf_turnstile_response, client_ip):
+        raise HTTPException(status_code=403, detail="Verificação anti-bot (Turnstile) falhou.")
+
     if not settings.NVIDIA_API_KEY:
         raise HTTPException(status_code=500, detail="NVIDIA_API_KEY não configurada no servidor.")
 

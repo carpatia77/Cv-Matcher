@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     NVIDIA_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
     APP_ENV: str = "development"
 
+    TURNSTILE_SECRET_KEY: str = ""
+    TURNSTILE_SITE_KEY: str = ""
+
     TIMEOUT_EXTRACTION: float = 20.0
     TIMEOUT_OPTIMIZATION: float = 90.0
     TIMEOUT_EMBEDDING: float = 30.0

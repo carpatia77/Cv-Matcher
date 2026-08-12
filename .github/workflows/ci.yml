@@ -28,6 +28,12 @@ jobs:
       run: |
         ruff check .
 
+    - name: Security audit with pip-audit
+      run: |
+        pip install pip-audit
+        pip-audit -r requirements.txt
+
     - name: Test with pytest
       run: |
         pytest -v
+
