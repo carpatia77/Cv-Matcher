@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from typing import Optional
 
 from app.config import BASE_DIR
 from app.logger import logger
@@ -191,7 +192,7 @@ def check_and_record_global_call(max_calls: int = 5, window_seconds: float = 60.
         conn.commit()
         return True
 
-def record_injection_attempt(ip: str, run_id: str | None = None, source: str = "unknown") -> None:
+def record_injection_attempt(ip: str, run_id: Optional[str] = None, source: str = "unknown") -> None:
     import time
     now = time.time()
     cleanup_cutoff = now - 86400.0  # mantém 24h de histórico
