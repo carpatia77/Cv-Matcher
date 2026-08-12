@@ -39,7 +39,7 @@ cv-matcher/
 
 ## 💻 Execução Local
 
-### Opção 1: Ambiente Virtual (Python 3.9+)
+### Opção 1: Ambiente Virtual (Python 3.11+)
 
 1. Clone o repositório e crie o ambiente virtual:
    ```bash
