@@ -165,22 +165,23 @@ def get_daily_call_count() -> int:
         row = cur.fetchone()
         return row[0] if row else 0
 
-def record_global_call() -> None:
+def check_and_record_global_call(max_calls: int = 5, window_seconds: float = 60.0) -> bool:
     import time
     now = time.time()
-    cutoff = now - 300.0  # Limpar registros antigos com mais de 5 minutos
+    cutoff = now - window_seconds
+    cleanup_cutoff = now - 300.0
     with get_db() as conn:
-        conn.execute("INSERT INTO global_calls (timestamp) VALUES (?)", (now,))
-        conn.execute("DELETE FROM global_calls WHERE timestamp < ?", (cutoff,))
-        conn.commit()
-
-def count_recent_global_calls(window_seconds: float = 60.0) -> int:
-    import time
-    cutoff = time.time() - window_seconds
-    with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         cur = conn.execute("SELECT COUNT(id) FROM global_calls WHERE timestamp >= ?", (cutoff,))
-        row = cur.fetchone()
-        return row[0] if row else 0
+        count = cur.fetchone()[0]
+        if count >= max_calls:
+            conn.rollback()
+            return False
+        conn.execute("INSERT INTO global_calls (timestamp) VALUES (?)", (now,))
+        conn.execute("DELETE FROM global_calls WHERE timestamp < ?", (cleanup_cutoff,))
+        conn.commit()
+        return True
+
 
 
 

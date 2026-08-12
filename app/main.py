@@ -24,14 +24,13 @@ from slowapi.util import get_remote_address
 
 from app.config import BASE_DIR, settings
 from app.database import (
+    check_and_record_global_call,
     cleanup_expired_runs,
-    count_recent_global_calls,
     get_daily_call_count,
     get_run_db,
     increment_daily_calls,
     init_db,
     load_jobs_db,
-    record_global_call,
     save_run_db,
 )
 from app.logger import logger
@@ -303,15 +302,14 @@ async def check_global_rate_limits():
             detail="Limite diário de análises atingido. Tente novamente amanhã."
         )
 
-    # 2. Rate Limit Global de 5/minuto (teto agregado compartilhado via SQLite entre workers)
-    recent_calls = count_recent_global_calls(60.0)
-    if recent_calls >= settings.GLOBAL_LLM_CALLS_PER_MINUTE:
+    # 2. Rate Limit Global de 5/minuto (atômico via SQLite BEGIN IMMEDIATE entre workers)
+    allowed = check_and_record_global_call(settings.GLOBAL_LLM_CALLS_PER_MINUTE, 60.0)
+    if not allowed:
         raise HTTPException(
             status_code=503,
             detail="Limite global de análises por minuto atingido. Tente novamente em instantes."
         )
 
-    record_global_call()
     increment_daily_calls()
 
 # ---------- VALIDAÇÃO ANTI-BOT (CLOUDFLARE TURNSTILE) ----------
