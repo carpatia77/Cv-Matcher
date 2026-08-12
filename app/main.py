@@ -58,9 +58,14 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://blackpill.unaux.com",
+        "https://cv-matcher.duckdns.org:8443",
+        "http://localhost:8055",
+        "http://127.0.0.1:8055",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -820,7 +825,7 @@ async def analyze(
     if not descricao_vaga.strip():
         raise HTTPException(status_code=400, detail="A descrição da vaga é obrigatória.")
 
-    descricao_final = descricao_vaga.strip()
+    descricao_final = descricao_vaga.strip()[:10000]
     primeira_linha = descricao_final.split("\n")[0].strip()
     vaga_alvo = primeira_linha[:40] if primeira_linha else "Vaga Customizada"
     run_id = uuid.uuid4().hex

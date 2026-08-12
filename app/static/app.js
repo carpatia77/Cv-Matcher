@@ -90,7 +90,7 @@ function setStatus(message, type = 'idle') {
   if (type === 'error') iconName = 'x-circle';
 
   status.className = `status-bar ${type}`;
-  status.innerHTML = `<i data-lucide="${iconName}" style="width: 16px; height: 16px; flex-shrink: 0;"></i> <span>${message}</span>`;
+  status.innerHTML = `<i data-lucide="${iconName}" style="width: 16px; height: 16px; flex-shrink: 0;"></i> <span>${escapeHTML(message)}</span>`;
   lucide.createIcons();
 }
 
@@ -106,8 +106,9 @@ function setPills(text, type) {
   if (type === 'warning') iconName = 'alert-circle';
   if (type === 'error') iconName = 'alert-triangle';
 
-  statusPill.innerHTML = `<i data-lucide="${iconName}" style="width: 12px; height: 12px;"></i> <span id="statusPillText">${text}</span>`;
-  resultPill.innerHTML = `<i data-lucide="${iconName}" style="width: 12px; height: 12px;"></i> <span id="resultPillText">${text}</span>`;
+  const cleanText = escapeHTML(text);
+  statusPill.innerHTML = `<i data-lucide="${iconName}" style="width: 12px; height: 12px;"></i> <span id="statusPillText">${cleanText}</span>`;
+  resultPill.innerHTML = `<i data-lucide="${iconName}" style="width: 12px; height: 12px;"></i> <span id="resultPillText">${cleanText}</span>`;
   lucide.createIcons();
 }
 
@@ -186,7 +187,8 @@ function setAuditText(text) {
   if (!text) {
     container.textContent = 'Aguardando o processamento do currículo para exibir o parecer executivo, análise de riscos e gaps técnicos.';
   } else {
-    container.innerHTML = renderMarkdown(text);
+    const rawHtml = renderMarkdown(text);
+    container.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(rawHtml) : rawHtml;
   }
 }
 
@@ -195,7 +197,8 @@ function setCustomCvText(text) {
   if (!text) {
     container.textContent = 'Aguardando o processamento do currículo para exibir a versão customizada pronta para envio.';
   } else {
-    container.innerHTML = renderMarkdown(text);
+    const rawHtml = renderMarkdown(text);
+    container.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(rawHtml) : rawHtml;
   }
 }
 

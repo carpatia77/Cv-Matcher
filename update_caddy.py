@@ -22,9 +22,12 @@ https://cv-matcher.duckdns.org:8443 {
         header_up X-Real-IP {remote}
         header_down X-Accel-Buffering "no"
         header_down -X-Frame-Options
-        header_down Content-Security-Policy "frame-ancestors *;"
         flush_interval -1
     }
+
+    header Content-Security-Policy "frame-ancestors https://blackpill.unaux.com 'self';"
+    header X-Content-Type-Options "nosniff"
+    header Referrer-Policy "strict-origin-when-cross-origin"
 }"""
 
 with open('/etc/caddy/Caddyfile', 'w') as f:

@@ -59,8 +59,33 @@ sudo systemctl status caddy --no-pager
 
 ---
 
+---
+
+## 🛡️ Configuração de Segurança Adicional (Fail2ban no SSH)
+
+Como o SSH está escutando na porta **443** na VM Oracle Linux (baseada em RHEL), configure o `fail2ban` apontando explicitamente para o arquivo de log `/var/log/secure`:
+
+1. Crie o arquivo `/etc/fail2ban/jail.local`:
+   ```ini
+   [sshd]
+   enabled  = true
+   port     = 443
+   logpath  = /var/log/secure
+   maxretry = 5
+   bantime  = 3600
+   ```
+
+2. Reinicie e habilite o serviço:
+   ```bash
+   sudo systemctl enable --now fail2ban
+   sudo fail2ban-client status sshd
+   ```
+
+---
+
 ## 🔍 Checklist de Validação Pós-Deploy
 
-- [ ] `curl -I https://cv-matcher.duckdns.org/` retorna status `HTTP/2 200` ou `HTTP/1.1 200`.
-- [ ] O certificado SSL emitido pelo Let's Encrypt está ativo e válido.
-- [ ] Ao acessar o site no ProFreeHost (`https://...`), a interface do ATS Predictor Neural é renderizada diretamente dentro do `iframe` sem avisos de *Mixed Content* no Console de Desenvolvedor (F12).
+- [ ] `curl -s https://cv-matcher.duckdns.org:8443/api/health` retorna `{"status":"ok", ...}`.
+- [ ] O certificado SSL emitido pela Let's Encrypt está ativo e válido.
+- [ ] O cabeçalho `Content-Security-Policy: frame-ancestors https://blackpill.unaux.com 'self';` está presente na resposta do Caddy.
+- [ ] Ao acessar o site no ProFreeHost (`https://blackpill.unaux.com`), a interface é renderizada no `iframe` sem erros de *Mixed Content* nem alertas de XSS.
