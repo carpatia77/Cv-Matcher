@@ -15,7 +15,8 @@ http://btc-flow-monitor.duckdns.org:8443 {
     }
 }
 
-cv-matcher.duckdns.org {
+https://cv-matcher.duckdns.org:8443 {
+    tls /etc/caddy/fullchain.pem /etc/caddy/privkey.pem
     reverse_proxy 127.0.0.1:8055 {
         header_up Host {host}
         header_up X-Real-IP {remote}
