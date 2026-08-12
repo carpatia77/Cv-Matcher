@@ -1,0 +1,29 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+# Enable the rule sets the CI was checking
+select = ["E", "F", "I", "B", "BLE", "RUF", "ASYNC"]
+
+ignore = [
+    # FastAPI dependency-injection pattern: File(...) / Form(...) in default args
+    "B008",
+    # LLM fallback chains require broad exception handling to be resilient
+    # across heterogeneous API error types from NVIDIA NIM
+    "BLE001",
+    # File is written synchronously then handed off to BackgroundTasks thread —
+    # acceptable in this context
+    "ASYNC230",
+    # os.path.exists is used for simple file-existence checks before FileResponse;
+    # adding trio/anyio paths would over-engineer this FastAPI+uvicorn stack
+    "ASYNC240",
+    # Long lines in LLM prompt strings are intentional and must not be wrapped
+    "E501",
+    # PEP 484 optional — will be fixed in a dedicated type annotation pass
+    "RUF013",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

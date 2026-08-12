@@ -1,6 +1,9 @@
 import asyncio
+
 from openai import AsyncOpenAI
+
 from app.config import settings
+
 
 async def check_models():
     print(f"Verificando NVIDIA_API_KEY: {'[CONFIGURADA]' if settings.NVIDIA_API_KEY else '[NÃO ENCONTRADA]'}")

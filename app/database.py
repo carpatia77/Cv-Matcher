@@ -1,8 +1,8 @@
-import sqlite3
 import json
+import sqlite3
+
 from app.config import BASE_DIR
 from app.logger import logger
-
 
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "ats.db"

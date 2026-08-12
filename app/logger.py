@@ -1,8 +1,10 @@
-import logging
 import json
+import logging
 import sys
 from datetime import datetime
+
 from app.config import settings
+
 
 class JSONFormatter(logging.Formatter):
     def format(self, record):
