@@ -2,7 +2,7 @@ fastapi>=0.100.0,<1.0.0
 uvicorn[standard]>=0.23.0,<1.0.0
 python-multipart>=0.0.6,<1.0.0
 jinja2>=3.1.2,<4.0.0
-pymupdf>=1.26.7,<2.0.0
+pymupdf>=1.23.0,<2.0.0
 openai>=1.14.0,<2.0.0
 fpdf2>=2.7.4,<3.0.0
 numpy>=1.26.0
@@ -10,8 +10,10 @@ pydantic-settings>=2.0.3,<3.0.0
 slowapi>=0.1.9,<0.2.0
 aiofiles>=23.2.1,<24.0.0
 
-# Pins de seguranca para dependencias transitivas com CVEs conhecidas (ver pip-audit no CI)
-starlette>=1.3.1
-click>=8.3.3
-pillow>=12.3.0
-python-dotenv>=1.2.2
+# NOTA: python-multipart, pymupdf, starlette, click, pillow e python-dotenv tem CVEs
+# conhecidas cujas versoes corrigidas exigem Python >=3.10. A VM de producao roda
+# Python 3.9.25 (ver docs/PLANO_ALINHAMENTO_PYTHON_CI.md), entao nao ha versao
+# nao-vulneravel instalavel neste ambiente hoje para nenhum desses pacotes. Os pisos
+# de versao foram testados um a um contra --python-version 3.9 e nenhum resolve.
+# Risco aceito e documentado via --ignore-vuln no step de pip-audit do CI, ate a VM
+# ser atualizada para 3.10+ (Passo 4 do plano acima).
