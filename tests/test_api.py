@@ -62,3 +62,8 @@ def test_analyze_valid_pdf(client):
     assert data["status"] == "processing"
     assert "run_id" in data
 
+def test_sqlite_backup_script():
+    from scripts.backup_db import run_backup
+    run_backup()
+
+

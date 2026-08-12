@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     HTTPX_TIMEOUT: float = 240.0
     AUDIT_MAX_TOKENS: int = 4096
     MAX_UPLOAD_MB: int = 10
+    GLOBAL_LLM_CALLS_PER_MINUTE: int = 5
+    MAX_DAILY_LLM_CALLS: int = 100
 
     DATABASE_URL: str = f"sqlite:///{BASE_DIR}/data/ats.db"
 

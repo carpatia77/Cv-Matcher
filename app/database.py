@@ -45,6 +45,12 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS daily_metrics (
+                date TEXT PRIMARY KEY,
+                call_count INTEGER DEFAULT 0
+            )
+        """)
         try:
             conn.execute("ALTER TABLE runs ADD COLUMN reescrita_cv TEXT")
             conn.execute("ALTER TABLE runs ADD COLUMN output_cv_pdf TEXT")
@@ -131,5 +137,27 @@ def cleanup_expired_runs(ttl_seconds: int = 3600):
                         logger.error(f"Erro ao remover arquivo PDF {pdf_path}: {e}")
         conn.execute("DELETE FROM runs WHERE datetime(created_at, ?) < datetime('now')", (f"+{ttl_seconds} seconds",))
         conn.commit()
+
+def increment_daily_calls() -> int:
+    import time
+    with get_db() as conn:
+        today = time.strftime("%Y-%m-%d")
+        conn.execute("""
+            INSERT INTO daily_metrics (date, call_count) VALUES (?, 1)
+            ON CONFLICT(date) DO UPDATE SET call_count = call_count + 1
+        """, (today,))
+        conn.commit()
+        cur = conn.execute("SELECT call_count FROM daily_metrics WHERE date = ?", (today,))
+        row = cur.fetchone()
+        return row[0] if row else 1
+
+def get_daily_call_count() -> int:
+    import time
+    with get_db() as conn:
+        today = time.strftime("%Y-%m-%d")
+        cur = conn.execute("SELECT call_count FROM daily_metrics WHERE date = ?", (today,))
+        row = cur.fetchone()
+        return row[0] if row else 0
+
 
 
