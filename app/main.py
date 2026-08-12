@@ -11,22 +11,20 @@ from contextlib import asynccontextmanager
 import fitz
 import httpx
 import numpy as np
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, BackgroundTasks
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.middleware.cors import CORSMiddleware
 from fpdf import FPDF
 from openai import AsyncOpenAI
-
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
-from app.config import settings, BASE_DIR
+from app.config import BASE_DIR, settings
+from app.database import cleanup_expired_runs, get_run_db, init_db, load_jobs_db, save_run_db
 from app.logger import logger
-from app.database import init_db, load_jobs_db, save_run_db, get_run_db, cleanup_expired_runs
-
 
 APP_DIR = BASE_DIR / "app"
 TEMPLATES_DIR = APP_DIR / "templates"
@@ -302,9 +300,9 @@ async def timed_call(label, coro, timeout_s, fallback=None):
         logger.warning(f"{label} timeout")
         return fallback, f"timeout:{label}"
     except Exception as e:
-        logger.error(f"{label} error type={type(e).__name__} msg={repr(e)}")
+        logger.error(f"{label} error type={type(e).__name__} msg={e!r}")
         logger.debug(f"{label} traceback: {traceback.format_exc()}")
-        return fallback, f"error:{label}:{type(e).__name__}:{repr(e)}"
+        return fallback, f"error:{label}:{type(e).__name__}:{e!r}"
 
 # ---------- SIMILARIDADE SEMÂNTICA ----------
 _embedding_cache = {}
@@ -350,15 +348,15 @@ async def calcular_similaridade_semantica(texto1: str, texto2: str, cliente_api:
             return val
         except Exception as e:
             last_err = e
-            logger.debug(f"embedding fail model={t['model']} err={type(e).__name__}: {repr(e)}")
+            logger.debug(f"embedding fail model={t['model']} err={type(e).__name__}: {e!r}")
 
-    logger.debug(f"embedding all models failed, returning fallback 50.0. last_err={repr(last_err)}")
+    logger.debug(f"embedding all models failed, returning fallback 50.0. last_err={last_err!r}")
     return 50.0
 
 # ---------- ROTEAMENTO INTELIGENTE (LLM ROUTING & FALLBACK) ----------
-async def run_llm_with_fallback(client: AsyncOpenAI, prompt: str, task_name: str, timeout: float, max_tokens: int, temperature: float = 0.2, fallback_content: str = ""):
+async def run_llm_with_fallback(client: AsyncOpenAI, prompt: str, task_name: str, call_timeout: float, max_tokens: int, temperature: float = 0.2, fallback_content: str = ""):
     for model_name in LLM_ROUTING_CHAIN:
-        logger.debug(f"{task_name} trying model={model_name} with timeout={timeout}s")
+        logger.debug(f"{task_name} trying model={model_name} with timeout={call_timeout}s")
         try:
             response, err = await timed_call(
                 f"{task_name}-{model_name}",
@@ -368,7 +366,7 @@ async def run_llm_with_fallback(client: AsyncOpenAI, prompt: str, task_name: str
                     temperature=temperature,
                     max_tokens=max_tokens,
                 ),
-                timeout_s=timeout,
+                timeout_s=call_timeout,
                 fallback=None,
             )
             if response and hasattr(response, "choices"):
@@ -381,9 +379,9 @@ async def run_llm_with_fallback(client: AsyncOpenAI, prompt: str, task_name: str
             else:
                 logger.debug(f"{task_name} model={model_name} failed: err={err}")
         except asyncio.TimeoutError:
-            logger.warning(f"{task_name} model={model_name} TIMEOUT after {timeout}s")
+            logger.warning(f"{task_name} model={model_name} TIMEOUT after {call_timeout}s")
         except Exception as e:
-            logger.error(f"{task_name} model={model_name} exception: {type(e).__name__}: {repr(e)}")
+            logger.error(f"{task_name} model={model_name} exception: {type(e).__name__}: {e!r}")
             if "rate_limit" in str(e).lower():
                 await asyncio.sleep(5)
 
@@ -420,7 +418,7 @@ Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simple
 """.strip()
 
             fallback_cv = sanitize_text(cv_text_raw)[:3500]
-            resposta_otimizacao_bruta, opt_err, opt_model_used = await run_llm_with_fallback(
+            resposta_otimizacao_bruta, opt_err, _opt_model_used = await run_llm_with_fallback(
                 client, prompt_otimizacao, "optimization", settings.TIMEOUT_OPTIMIZATION, 2500, 0.2, fallback_cv
             )
 
@@ -441,7 +439,7 @@ Escreva SOMENTE o currículo reformulado abaixo desta linha. Use Markdown simple
                     timeout=settings.TIMEOUT_EMBEDDING,
                 )
             except Exception as e:
-                logger.debug(f"similarity fallback err={repr(e)}")
+                logger.debug(f"similarity fallback err={e!r}")
                 s_nlp = 50.0
 
             # ---- 3. AUDITORIA (DEEPSEEK ou FALLBACK) ----
@@ -545,9 +543,9 @@ Explique detalhadamente:
 - O que está reduzindo a aderência
 
 Utilize a seguinte referência:
-- 90–100% = Excelente aderência
-- 75–89% = Forte aderência
-- 60–74% = Aderência moderada
+- 90-100% = Excelente aderência
+- 75-89% = Forte aderência
+- 60-74% = Aderência moderada
 - abaixo de 60% = Baixa aderência
 
 ETAPA 4 — COMPARATIVO ESTRUTURADO
@@ -655,7 +653,7 @@ Inclua:
 - pontos críticos para melhoria
 
 Ao final, atribua:
-- Nota ATS do currículo (0–10)
+- Nota ATS do currículo (0-10)
 - Potencial competitivo da candidatura
 - Principais fatores que aumentariam as chances de entrevista
 
@@ -721,7 +719,7 @@ CURRÍCULO ORIGINAL DO CANDIDATO:
 {cv_text_raw[:30000]}
 """.strip()
 
-            reescrita_cv, reescrita_err, reescrita_model_used = await run_llm_with_fallback(
+            reescrita_cv, reescrita_err, _reescrita_model_used = await run_llm_with_fallback(
                 client, prompt_reescrita, "reescrita_customizada", settings.TIMEOUT_AUDIT, 4096, 0.2, cv_otimizado_texto
             )
 
