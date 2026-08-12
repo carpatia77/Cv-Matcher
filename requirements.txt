@@ -9,3 +9,11 @@ numpy>=1.26.0
 pydantic-settings>=2.0.3,<3.0.0
 slowapi>=0.1.9,<0.2.0
 aiofiles>=23.2.1,<24.0.0
+
+# NOTA: python-multipart, pymupdf, starlette, click, pillow e python-dotenv tem CVEs
+# conhecidas cujas versoes corrigidas exigem Python >=3.10. A VM de producao roda
+# Python 3.9.25 (ver docs/PLANO_ALINHAMENTO_PYTHON_CI.md), entao nao ha versao
+# nao-vulneravel instalavel neste ambiente hoje para nenhum desses pacotes. Os pisos
+# de versao foram testados um a um contra --python-version 3.9 e nenhum resolve.
+# Risco aceito e documentado via --ignore-vuln no step de pip-audit do CI, ate a VM
+# ser atualizada para 3.10+ (Passo 4 do plano acima).
