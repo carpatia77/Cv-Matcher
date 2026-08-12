@@ -15,21 +15,13 @@ http://btc-flow-monitor.duckdns.org:8443 {
     }
 }
 
-http://cv-matcher.duckdns.org:8443 {
+cv-matcher.duckdns.org {
     reverse_proxy 127.0.0.1:8055 {
         header_up Host {host}
         header_up X-Real-IP {remote}
         header_down X-Accel-Buffering "no"
-        flush_interval -1
-    }
-}
-
-https://cv-matcher.duckdns.org:9443 {
-    tls /etc/caddy/fullchain.pem /etc/caddy/privkey.pem
-    reverse_proxy 127.0.0.1:8055 {
-        header_up Host {host}
-        header_up X-Real-IP {remote}
-        header_down X-Accel-Buffering "no"
+        header_down -X-Frame-Options
+        header_down Content-Security-Policy "frame-ancestors *;"
         flush_interval -1
     }
 }"""

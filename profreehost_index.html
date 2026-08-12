@@ -82,7 +82,7 @@
 </head>
 <body>
 
-    <!-- Iframe em tela cheia apontando para o endpoint oficial do DuckDNS na porta 8443 (Caddy) -->
+    <!-- Iframe em tela cheia apontando para o endpoint oficial HTTPS do DuckDNS (Caddy) -->
     <iframe id="appFrame" title="ATS Predictor Neural" allow="fullscreen; clipboard-read; clipboard-write; downloads"></iframe>
 
     <!-- Launcher Executivo Exibido com Maestria para o Visitante -->
@@ -92,20 +92,20 @@
             <p>Auditoria e Otimização Inteligente de Currículos com <strong>Llama 3.3 70B</strong>. Infraestrutura 100% protegida na nuvem da Oracle.</p>
             
             <div style="margin: 35px 0; display: flex; justify-content: center;">
-                <a id="mainAccessBtn" href="http://cv-matcher.duckdns.org:8443/" target="_blank" class="btn-launch" style="width: 85%;">🚀 Iniciar Painel Neural</a>
+                <a id="mainAccessBtn" href="https://cv-matcher.duckdns.org/" target="_blank" class="btn-launch" style="width: 85%;">🚀 Iniciar Painel Neural</a>
             </div>
 
-            <p style="margin-top: 15px; font-size: 0.9rem; color: #64748b;">(Infraestrutura de alta disponibilidade via DuckDNS e Caddy)</p>
+            <p style="margin-top: 15px; font-size: 0.9rem; color: #64748b;">(Infraestrutura de alta disponibilidade via DuckDNS e Caddy HTTPS)</p>
         </div>
     </div>
 
     <script>
-        // ENDPOINT OFICIAL DO DUCKDNS (Porta 8443 limpa e 100% acessível no Caddy da Oracle Cloud)
-        const DUCKDNS_OFFICIAL_URL = "http://cv-matcher.duckdns.org:8443/";
+        // ENDPOINT OFICIAL DO DUCKDNS (HTTPS na porta 443 via Caddy com certificado automático Let's Encrypt)
+        const DUCKDNS_OFFICIAL_URL = "https://cv-matcher.duckdns.org/";
 
         document.getElementById('mainAccessBtn').href = DUCKDNS_OFFICIAL_URL;
 
-        // Carregamento limpo via DuckDNS na porta 8443
+        // Carregamento limpo no iframe via HTTPS
         setTimeout(() => {
             const frame = document.getElementById('appFrame');
             frame.src = DUCKDNS_OFFICIAL_URL;
