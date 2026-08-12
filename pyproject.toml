@@ -4,7 +4,8 @@ line-length = 120
 
 [tool.ruff.lint]
 # Enable the rule sets the CI was checking
-select = ["E", "F", "I", "B", "BLE", "RUF", "ASYNC"]
+# FA: flake8-future-annotations — flags PEP 604 syntax (X | Y) incompatible with target-version
+select = ["E", "F", "I", "B", "BLE", "RUF", "ASYNC", "FA"]
 
 ignore = [
     # FastAPI dependency-injection pattern: File(...) / Form(...) in default args
@@ -22,6 +23,10 @@ ignore = [
     "E501",
     # PEP 484 optional — will be fixed in a dedicated type annotation pass
     "RUF013",
+    # FA100 nudges toward `from __future__ import annotations`, which changes how FastAPI
+    # resolves type hints at runtime — kept as Optional[X] intentionally. FA102 (the real
+    # protection against py3.10+ syntax like `X | Y`) stays active.
+    "FA100",
 ]
 
 [tool.pytest.ini_options]
